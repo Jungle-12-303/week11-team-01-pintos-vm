@@ -30,6 +30,7 @@ static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
 static bool duplicate_fd_table (struct thread *curr, struct thread *parent);
+static bool init_fd_table (struct thread *t);
 
 struct fork_args {
 	struct thread *parent;   // fork를 호출한 부모 스레드
@@ -134,6 +135,10 @@ initd (void *f_name) {
 #endif
 
 	curr->self_status = args->cs;
+	if (!init_fd_table (curr)) {
+		thread_exit ();
+	}
+
 	process_init ();
 	f_name = args->file_name;
 	free (args);
@@ -250,12 +255,13 @@ static bool
 duplicate_fd_table (struct thread *curr, struct thread *parent) {
 	int fd;
 
-	if (curr == NULL || parent == NULL)
+	if (curr == NULL || parent == NULL) {
 		return false;
+	}
 
-	curr->fd_table = palloc_get_page (PAL_ZERO);
-	if (curr->fd_table == NULL)
+	if (!init_fd_table (curr)) {
 		return false;
+	}
 
 	if (parent->fd_table == NULL) {
 		curr->next_fd = 2;
@@ -285,6 +291,21 @@ error:
 	curr->fd_table = NULL;
 	curr->next_fd = 2;
 	return false;
+}
+
+static bool
+init_fd_table (struct thread *t) {
+	if (t == NULL)
+		return false;
+	if (t->fd_table != NULL)
+		return true;
+
+	t->fd_table = palloc_get_page (PAL_ZERO);
+	if (t->fd_table == NULL)
+		return false;
+
+	t->next_fd = 2;
+	return true;
 }
 
 /*
@@ -333,7 +354,7 @@ __do_fork (void *aux) {
 	if (!pml4_for_each (parent->pml4, duplicate_pte, parent))
 		goto error;
 #endif
-
+	ASSERT (curr->fd_table == NULL);
 	if (!duplicate_fd_table (curr, parent))
 		goto error;
 
@@ -392,7 +413,7 @@ process_exec (void *f_name) {
 
 	/* 첫 exec일 때만 fd_table을 준비하고, 기존 열린 fd는 유지한다. */
 	if (curr->fd_table == NULL) {
-		curr->fd_table = palloc_get_page (PAL_ZERO);
+		init_fd_table (curr);
 		if (curr->fd_table == NULL) {
 			palloc_free_page (file_name);
 			return -1;
@@ -497,16 +518,19 @@ process_add_file (struct file *f) {
 	if (curr == NULL || f == NULL || curr->fd_table == NULL)
 		return -1;
 
+	// 빈 fd_table에 파일 f 넣는다
 	for (fd = 2; fd < FD_MAX; fd++) {
 		if (curr->fd_table[fd] != NULL)
 			continue;
 
 		curr->fd_table[fd] = f;
+
+		// fd 번호가 next_fd보다 크거나 같으면
 		if (fd >= curr->next_fd)
-			curr->next_fd = fd + 1;
+			curr->next_fd = fd + 1; // next_fd를 다음 번호로 바꿔라
 		return fd;
 	}
-
+	// 빈 fd칸 못찾았을 때
 	return -1;
 }
 
@@ -527,6 +551,7 @@ process_close_file (int fd) {
 	if (curr == NULL || fd < 2 || fd >= FD_MAX || curr->fd_table == NULL)
 		return;
 
+	// fd 테이블에 파일이 없으면
 	if (curr->fd_table[fd] == NULL)
 		return;
 
