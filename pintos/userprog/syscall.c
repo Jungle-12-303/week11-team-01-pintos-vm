@@ -135,7 +135,6 @@ halt (void) {
 }
 
 tid_t
-
 fork (const char *thread_name, struct intr_frame *if_) {
 	check_address (thread_name);
 	return process_fork (thread_name, if_);
@@ -273,62 +272,10 @@ read (int fd, void *buffer, unsigned size) {
 	}
 }
 
-void
-seek (int fd, off_t new_pos) {
-	struct file *f = process_get_file (fd);
-	file_seek (f, new_pos);
-}
-
 unsigned
 tell (int fd) {
 	struct file *f = process_get_file (fd);
 	return file_tell (f);
-}
-
-int
-filesize (int fd) {
-	struct file *f = process_get_file (fd);
-	return file_length (f);
-}
-
-bool
-remove (const char *file) {
-	return filesys_remove (file);
-}
-
-int
-read (int fd, void *buffer, unsigned size) {
-	int type_size = 0;
-	uint8_t *buf = (uint8_t *) buffer;
-
-	check_address (buffer);
-
-	lock_acquire (&filesys_lock);
-	struct file *f = process_get_file (fd);
-	if (f == NULL) {
-		lock_release (&filesys_lock);
-		return -1;
-	}
-
-	if (fd == 0) {
-		while (type_size < size) {
-			buf[type_size] = input_getc ();
-
-			if (buf[type_size] == '\n') {
-				break;
-			}
-			type_size++;
-		}
-
-		lock_release (&filesys_lock);
-		return type_size;
-	}
-
-	else {
-		off_t s = file_read (f, buffer, size);
-		lock_release (&filesys_lock);
-		return s;
-	}
 }
 
 int
@@ -347,11 +294,7 @@ seek (int fd, unsigned position) {
 	struct file *f = process_get_file (fd);
 	file_seek (f, position);
 }
-unsigned
-tell (int fd) {
-	struct file *f = process_get_file (fd);
-	return file_tell (f);
-}
+
 /* 여기서부턴 헬퍼 함수 기술 */
 /* 유효성 검사 */
 void
