@@ -31,6 +31,9 @@ enum vm_type {
 #include "filesys/page_cache.h"
 #endif
 
+/* 추가 임포트 */
+#include "lib/kernel/hash.h"
+
 struct page_operations;
 struct thread;
 
@@ -45,6 +48,7 @@ struct page {
 	const struct page_operations *operations;
 	void *va;              /* 유저 공간 기준 주소 */
 	struct frame *frame;   /* frame에서 page로 되돌아오는 참조 */
+	struct hash_elem hash_elem; /* hash table에 종속되도록 */
 
 	/* 구현부 */
 
@@ -86,6 +90,8 @@ struct page_operations {
  * 이 구조체 설계는 특정 방식으로 강제하지 않는다.
  * 설계는 전적으로 구현자 선택이다. */
 struct supplemental_page_table {
+	/* 기존 hash table 기능 사용하기로 */
+	struct hash pages;
 };
 
 #include "threads/thread.h"
