@@ -3,6 +3,8 @@
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
+#include "lib/kernel/hash.h"
+#include "threads/vaddr.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -36,6 +38,8 @@ page_get_type (struct page *page) {
 static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
+static bool hash_list_sort(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
+static int hash_convert_int(const struct hash_elem *elem, void *aux UNUSED);
 
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
@@ -63,10 +67,12 @@ err:
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
-	struct page *page = NULL;
+	struct page page;
 	/* TODO: Fill this function. */
+	page.va = pg_round_down(va);
+	struct hash_elem *e = hash_find(spt->hash_table, &(page.hash_elem));
 
-	return page;
+	return hash_entry(e, struct page, hash_elem);
 }
 
 /* Insert PAGE into spt with validation. */
@@ -75,7 +81,9 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
 	int succ = false;
 	/* TODO: Fill this function. */
-
+	if(hash_insert(spt->hash_table , &page->hash_elem) == NULL){
+		succ = true;
+	}
 	return succ;
 }
 
@@ -174,6 +182,7 @@ vm_do_claim_page (struct page *page) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
+	hash_init(spt->hash_table, hash_convert_int, hash_list_sort, NULL);
 }
 
 /* Copy supplemental page table from src to dst */
@@ -187,4 +196,20 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+}
+
+static bool 
+hash_list_sort(const struct hash_elem *a, 
+	const struct hash_elem *b, void *aux UNUSED){
+		struct page *page_a = hash_entry(a, struct page, hash_elem);
+		struct page *page_b = hash_entry(b, struct page, hash_elem);
+
+		return page_a->va < page_b->va;
+	}
+
+static int 
+hash_convert_int(const struct hash_elem *elem, void *aux UNUSED){
+	struct page *page_elem = hash_entry(elem, struct page, hash_elem);
+
+	return hash_int(page_elem->va);
 }
