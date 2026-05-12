@@ -43,6 +43,14 @@ struct initd_args {
 	struct child_status *cs; // 부모가 만든 자식 상태 레코드
 };
 
+/* vm: 추가 구현 구조체 */
+struct load_info {
+	struct file *file;
+	off_t ofs;
+	uint32_t read_bytes;
+	uint32_t zero_bytes;
+};
+
 /* fd_table 최대 슬롯 수 (4KB 페이지 / 포인터 크기). */
 #define FD_MAX (PGSIZE / sizeof (struct file *))
 
@@ -1206,15 +1214,27 @@ validate_segment (const struct Phdr *phdr, struct file *file) {
 
 static bool
 lazy_load_segment (struct page *page, void *aux) {
-	/*
-	 * TODO: 파일에서 세그먼트를 로드하라.
-	 */
-	/*
-	 * TODO: 이 함수는 VA 주소에서 첫 번째 페이지 폴트가 발생했을 때 호출된다.
-	 */
-	/*
-	 * TODO: 이 함수를 호출할 때 VA를 사용할 수 있다.
-	 */
+	/* aux 구조체 해제 */
+	struct load_info *info = aux;
+	struct file *file = info->file;
+	off_t ofs = info->ofs;
+	uint32_t read_bytes = info->read_bytes;
+	uint32_t zero_bytes = info->zero_bytes;
+	void *Kva = page->frame->kva;
+
+
+	/* 최소구현 */
+	file_seek(file, ofs);
+	/* 실행 파일의 내용물을 램에 적재한다 */
+	file_read(file, Kva, read_bytes);
+	/* 나머지 page 여분을 0으로 채워버린다 */
+	memset(Kva + read_bytes, 0, zero_bytes);
+	
+	/* 마무리 작업 */
+	file_close(info->file);
+	free(info);
+	
+	return true;
 }
 
 /*
@@ -1248,10 +1268,13 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		/*
-		 * TODO: lazy_load_segment에 정보를 전달할 aux를 설정하라.
-		 */
-		void *aux = NULL;
+		/* lazy_load_segment 용 aux 설정 */
+		struct load_info *aux = malloc(sizeof(struct load_info));
+		aux->file = file_reopen(file);
+		aux->ofs = ofs;
+		aux->read_bytes = page_read_bytes;
+		aux->zero_bytes = page_zero_bytes;
+
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
 		                                     lazy_load_segment, aux))
 			return false;
@@ -1262,6 +1285,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += PGSIZE;
 	}
 	return true;
 }
@@ -1272,17 +1296,19 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
+	/* 페이지 시작 주소 */
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
 
-	/*
-	 * TODO: stack_bottom에 스택을 매핑하고 페이지를 즉시 claim하라.
-	 * TODO: 성공하면 그에 맞게 rsp를 설정하라.
-	 * TODO: 해당 페이지를 스택 페이지로 표시해야 한다.
-	 */
-	/*
-	 * TODO: 여기에 코드를 작성하라.
-	 */
+	/* 다음 과정을 수행한다:
+	   1. 페이지 골격을 만들고 spt 장부에 기입
+	   2. 실제 물리 frame에 연결 */
+	vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, true);
+	success = vm_claim_page(stack_bottom);
 
+	if(success){
+		if_->rsp = USER_STACK;
+	}
+		
 	return success;
 }
 

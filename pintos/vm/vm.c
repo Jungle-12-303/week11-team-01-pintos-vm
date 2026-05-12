@@ -11,10 +11,15 @@
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
+
+/* 추가 구현 구조체 */
+struct list frame_table;
+
 void
 vm_init (void) {
 	vm_anon_init ();
 	vm_file_init ();
+	list_init(&frame_table);
 #ifdef EFILESYS  /* For project 4 */
 	pagecache_init ();
 #endif
@@ -46,8 +51,7 @@ static struct frame *vm_evict_frame (void);
 unsigned page_hash(const struct hash_elem *e, void *aux);
 bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux);
 
-/* 추가 구현 구조체 */
-struct list frame_table;
+
 
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
@@ -86,10 +90,12 @@ err:
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
-	struct page *page = NULL;
-	/* TODO: Fill this function. */
-
-	return page;
+	struct page page;
+	page.va = pg_round_down(va);
+	struct hash_elem *e = hash_find (&spt->pages, &(page.hash_elem));
+	if (e == NULL)
+    	return NULL;
+	return hash_entry(e, struct page, hash_elem);
 }
 
 /* Insert PAGE into spt with validation. */
@@ -140,10 +146,9 @@ static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
 	/* 먼저 메모리 공간을 할당한다 */
-	frame = (struct frame *)malloc(sizeof(struct frame));
+	frame = malloc(sizeof *frame);
 	/* 뭔지 모르겠지만 방어코드 */
-	ASSERT (frame != NULL);
-	ASSERT (frame->page == NULL);
+	frame->page = NULL;
 	/* kva에 한 페이지 분량의 공간을 할당한다: 램 쪽임 */
 	frame->kva = palloc_get_page(PAL_USER);
 	/* NULL이 나오면 램이 꽉 참 => 스와핑 */
@@ -182,24 +187,20 @@ bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
-	struct page *page = NULL;
 	/* 먼저 validation을 수행한다
 	   case 1: 커널 영역을 건들면 아웃
 	   case 2: 메모리는 충분히 있는데 다른 이유로 터졌으니 아웃 */
 	if(!is_user_vaddr(addr)) return false;
 	if(!not_present) return false;
 	
-	/* 여기에 분기를 구현한다
-	   case 1: 이미 장부에 page가 존재한다면? => 잠자고 있는거 반환
-	   case 2: 장부에도 없는 새 page라면? => 새로 만들고 반환 */
-	// if(spt_find_page(spt, addr)){
-	// 	return vm_claim_page(addr);
-	// }else{
-		vm_stack_growth(addr);
-		/* 스택 끝 포인터 1페이지 분량 연장하기 */
-	// }
-	
-	return vm_do_claim_page (page);
+	/* 장부에 페이지가 있는 지 확인 */
+	struct page *page = spt_find_page(spt, addr);
+	if(page != NULL){
+	 	return vm_do_claim_page (page);
+	}
+
+	vm_stack_growth(addr);
+	return true;
 }
 
 /* Free the page.
