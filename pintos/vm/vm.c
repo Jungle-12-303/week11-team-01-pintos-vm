@@ -3,6 +3,7 @@
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
+#include "threads/vaddr.h" // round 함수 사용 위함
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -62,19 +63,32 @@ err:
 
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
-spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
-	struct page *page = NULL;
-	/* TODO: Fill this function. */
+spt_find_page (struct supplemental_page_table *spt, void *va) {
+	struct page page;
+	struct hash_elem *elem;
+	
+	page.va = pg_round_down(va);
+	elem = hash_find (&spt->page_entry, &page.hash_elem);
 
-	return page;
+	if (elem == NULL)
+		return NULL;	
+
+	return hash_entry(elem, struct page, hash_elem);
 }
 
 /* Insert PAGE into spt with validation. */
 bool
-spt_insert_page (struct supplemental_page_table *spt UNUSED,
-		struct page *page UNUSED) {
-	int succ = false;
-	/* TODO: Fill this function. */
+spt_insert_page (struct supplemental_page_table *spt,
+		struct page *page) {
+	bool succ = false;
+	ASSERT(page != NULL);
+	/* insert에서 page->va를 pg_round_down으로 보정하지 않고 검증만 한다.
+	* page 객체 자체가 항상 page-aligned va를 갖도록 유지해야,
+	* 잘못 생성된 page를 빨리 발견할 수 있고 설계가 명확해짐. */
+	ASSERT(page->va == pg_round_down(page->va)); // 왜 이 값을 바로 넣지 않고, 검증을 하는가? >> 삽입 함수에서 정규화하는 것보다, page 객체 자체가 항상 정규화된 주소를 갖도록 유지하는 게 더 디버깅하기 좋고 설계도 명확하기 때문.
+	
+	if (hash_insert(&spt->page_entry, &page->hash_elem) == NULL)
+		succ = true;
 
 	return succ;
 }
@@ -171,9 +185,27 @@ vm_do_claim_page (struct page *page) {
 	return swap_in (page, frame->kva);
 }
 
+/* Returns true if page a precedes page b. */
+bool
+page_less (const struct hash_elem *a_,
+           const struct hash_elem *b_, void *aux UNUSED) {
+  const struct page *a = hash_entry (a_, struct page, hash_elem);
+  const struct page *b = hash_entry (b_, struct page, hash_elem);
+
+  return a->va < b->va;
+}
+
+/* Returns a hash value for page p. */
+unsigned
+page_hash (const struct hash_elem *p_, void *aux UNUSED) {
+  const struct page *p = hash_entry (p_, struct page, hash_elem);
+  return hash_bytes (&p->va, sizeof p->va);
+}
+
 /* Initialize new supplemental page table */
 void
-supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
+supplemental_page_table_init (struct supplemental_page_table *spt) {
+	hash_init(&spt->page_entry, page_hash, page_less, NULL);
 }
 
 /* Copy supplemental page table from src to dst */
