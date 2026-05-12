@@ -68,6 +68,7 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
+	struct list_elem frame_elem;  /* frame도 list 형태로 관리를 해야 함 */
 };
 
 /* 페이지 연산용 함수 테이블.

@@ -16,4 +16,7 @@ struct file *process_get_file (int fd);
 void process_close_file (int fd);
 int process_read_file (struct file *f, void *buffer, unsigned size);
 
+/* 추가 선언: vm용*/
+bool install_page (void *upage, void *kpage, bool writable);
+
 #endif /* userprog/process.h */

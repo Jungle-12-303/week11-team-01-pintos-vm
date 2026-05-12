@@ -7,6 +7,7 @@
 /* 추가된 include들 */
 #include "threads/vaddr.h"
 #include "lib/kernel/hash.h"
+#include "userprog/process.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -45,6 +46,9 @@ static struct frame *vm_evict_frame (void);
 unsigned page_hash(const struct hash_elem *e, void *aux);
 bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux);
 
+/* 추가 구현 구조체 */
+struct list frame_table;
+
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
  * `vm_alloc_page`. */
@@ -65,6 +69,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		/* 2. switch로 타입별 페이지 생성, 페이지 골격을 uninit로 만듦*/
 		switch(VM_TYPE(type)){
 			case VM_ANON:
+				/* uninit이 무엇인지.. 추후에 이해가 중요하다 => 나중에 호출됨 */
 				uninit_new(page, upage, init, type, aux, anon_initializer);
 				break;
 			default:
@@ -139,7 +144,18 @@ vm_get_frame (void) {
 	/* 뭔지 모르겠지만 방어코드 */
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
-	/*  */
+	/* kva에 한 페이지 분량의 공간을 할당한다: 램 쪽임 */
+	frame->kva = palloc_get_page(PAL_USER);
+	/* NULL이 나오면 램이 꽉 참 => 스와핑 */
+	if(frame->kva == NULL){
+		/* 아직 미구현 상태 */
+		return;
+	}
+
+	/* (선택사항: 아직 사용 안함) frame_table에 kva 맴버 넣기 */
+	list_push_back(&frame_table, &frame->frame_elem);
+	/* 초기화 작업 */
+	frame->page = NULL;
 
 	return frame;
 }
@@ -153,7 +169,7 @@ vm_stack_growth (void *addr UNUSED) {
 	/* 2. 페이지 생성 (타입 명, 시작 주소, 쓰기 권한) */
 	vm_alloc_page(VM_ANON, rounded_ptr, true);
 	/* 3. 프레임을 할당하고 MMU로 매핑 */
-	vm_claim_page(addr);
+	vm_claim_page(rounded_ptr);
 }
 
 /* Handle the fault on write_protected page */
@@ -180,6 +196,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	// 	return vm_claim_page(addr);
 	// }else{
 		vm_stack_growth(addr);
+		/* 스택 끝 포인터 1페이지 분량 연장하기 */
 	// }
 	
 	return vm_do_claim_page (page);
@@ -197,7 +214,12 @@ vm_dealloc_page (struct page *page) {
 bool
 vm_claim_page (void *va UNUSED) {
 	struct page *page = NULL;
-	/* TODO: Fill this function */
+	/* 앞서 spt에 insert한 페이지를 찾는다 */
+	struct supplemental_page_table *spt = &thread_current()->spt; 
+	page = spt_find_page(spt, va);
+
+	/* 예외처리 */
+	if(page == NULL) return false;
 
 	return vm_do_claim_page (page);
 }
@@ -211,7 +233,9 @@ vm_do_claim_page (struct page *page) {
 	frame->page = page;
 	page->frame = frame;
 
-	/* TODO: Insert page table entry to map page's VA to frame's PA. */
+	/* 요것이 MMU 매핑 함수라고 한다. 자세한 내용은 모름! */
+	bool is_installed = install_page(page->va, frame->kva, true);
+	if(!is_installed) return false;
 
 	return swap_in (page, frame->kva);
 }

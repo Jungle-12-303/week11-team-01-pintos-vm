@@ -1051,7 +1051,7 @@ done:
 /*
  * load() 보조 함수들.
  */
-static bool install_page (void *upage, void *kpage, bool writable);
+
 
 /*
  * FILE의 OFS 오프셋에서 시작하는 세그먼트를 UPAGE 주소에 로드한다.
@@ -1151,7 +1151,7 @@ setup_stack (struct intr_frame *if_) {
  * 성공하면 true를, UPAGE가 이미 매핑되어 있거나 메모리 할당에 실패하면
  * false를 반환한다.
  */
-static bool
+bool
 install_page (void *upage, void *kpage, bool writable) {
 	struct thread *t = thread_current ();
 
@@ -1286,7 +1286,7 @@ setup_stack (struct intr_frame *if_) {
 	return success;
 }
 
-/* 추가 구현: vm용 validate segment 함수 */
+/* 추가 도입: vm용 validate segment 함수 */
 static bool
 validate_segment (const struct Phdr *phdr, struct file *file) {
 	/* p_offset과 p_vaddr은 동일한 페이지 오프셋을 가져야 합니다. */
@@ -1319,4 +1319,18 @@ validate_segment (const struct Phdr *phdr, struct file *file) {
 	/* 괜찮은 것 같습니다. */
 	return true;
 }
+
+/* 추가 도입: vm용 install_page 함수 */
+bool
+install_page (void *upage, void *kpage, bool writable) {
+	struct thread *t = thread_current ();
+
+	/*
+	 * 그 가상 주소에 이미 페이지가 없는지 확인한 뒤, 그 위치에 페이지를
+	 * 매핑한다.
+	 */
+	return (pml4_get_page (t->pml4, upage) == NULL &&
+	        pml4_set_page (t->pml4, upage, kpage, writable));
+}
+
 #endif /* VM */
