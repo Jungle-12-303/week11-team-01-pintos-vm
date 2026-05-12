@@ -4,7 +4,7 @@
             "name": "PintOS (DevContainer)",
             "defines": [
                 "USERPROG",
-                // "VM",
+                "VM",
                 "FILESYS"
             ],
             "includePath": [
