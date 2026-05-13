@@ -8,6 +8,7 @@
 #include "threads/vaddr.h"
 #include "lib/kernel/hash.h"
 #include "userprog/process.h"
+#include "threads/mmu.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -234,9 +235,12 @@ vm_do_claim_page (struct page *page) {
 	frame->page = page;
 	page->frame = frame;
 
-	/* 요것이 MMU 매핑 함수라고 한다. 자세한 내용은 모름! */
-	bool is_installed = install_page(page->va, frame->kva, true);
-	if(!is_installed) return false;
+	/* 요것이 MMU 매핑 함수라고 한다. 자세한 내용은 모름! => 실패시 free */
+	if(!pml4_set_page(thread_current()->pml4, page->va, frame->kva, true)){
+		palloc_free_page(frame->kva);
+		free(frame);
+		return false;
+	}
 
 	return swap_in (page, frame->kva);
 }
