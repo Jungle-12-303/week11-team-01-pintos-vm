@@ -39,8 +39,6 @@ page_get_type (struct page *page) {
 static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
-static bool hash_list_sort(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
-static int hash_convert_int(const struct hash_elem *elem, void *aux UNUSED);
 
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
