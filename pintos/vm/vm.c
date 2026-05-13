@@ -147,14 +147,14 @@ vm_get_frame (void) {
 	struct frame *frame = NULL;
 	/* 먼저 메모리 공간을 할당한다 */
 	frame = malloc(sizeof *frame);
-	/* 뭔지 모르겠지만 방어코드 */
+	/* 페이지 초기화 진행 */
 	frame->page = NULL;
 	/* kva에 한 페이지 분량의 공간을 할당한다: 램 쪽임 */
 	frame->kva = palloc_get_page(PAL_USER);
 	/* NULL이 나오면 램이 꽉 참 => 스와핑 */
 	if(frame->kva == NULL){
 		/* 아직 미구현 상태 */
-		return;
+		return NULL;
 	}
 
 	/* (선택사항: 아직 사용 안함) frame_table에 kva 맴버 넣기 */
