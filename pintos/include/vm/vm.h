@@ -46,10 +46,10 @@ struct page {
 	const struct page_operations *operations;
 	void *va;              /* 유저 공간 기준 주소 */
 	struct frame *frame;   /* frame에서 page로 되돌아오는 참조 */
-	struct hash_elem hash_elem;
 
 	/* 구현부 */	
-
+  struct hash_elem hash_elem;
+  
 	/* 타입별 데이터는 union에 묶여 있다.
 	 * 각 함수는 현재 어떤 union 멤버를 써야 하는지 자동으로 판단한다. */
 	union {
@@ -88,7 +88,9 @@ struct page_operations {
  * 이 구조체 설계는 특정 방식으로 강제하지 않는다.
  * 설계는 전적으로 구현자 선택이다. */
 struct supplemental_page_table {
-	struct hash *hash_table;
+	// 페이지리스트
+	// hashtable할것이다
+	struct hash spt_entry;
 };
 
 #include "threads/thread.h"

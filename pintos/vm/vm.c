@@ -67,29 +67,27 @@ err:
 
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
-spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
+spt_find_page (struct supplemental_page_table *spt, void *va) {
 	struct page page;
-	/* TODO: Fill this function. */
-	page.va = pg_round_down(va);
-	struct hash_elem *e = hash_find(spt->hash_table, &(page.hash_elem));
-	
-	if(e == NULL){
-		return NULL;
-	}
+	struct hash_elem *elem = NULL;
 
-	return hash_entry(e, struct page, hash_elem);
+	page.va = pg_round_down (va);
+	elem = hash_find (&spt->spt_entry, &page.hash_elem);
+
+	if (elem == NULL)
+		return NULL;
+
+	return hash_entry (elem, struct page, hash_elem);
 }
 
 /* Insert PAGE into spt with validation. */
 bool
-spt_insert_page (struct supplemental_page_table *spt UNUSED,
-		struct page *page UNUSED) {
-	int succ = false;
-	/* TODO: Fill this function. */
-	if(hash_insert(spt->hash_table , &page->hash_elem) == NULL){
-		succ = true;
-	}
-	return succ;
+spt_insert_page (struct supplemental_page_table *spt,
+                 struct page *page) {
+	if (hash_insert (&spt->spt_entry, &page->hash_elem) == NULL)
+		return true;
+	else
+		return false;
 }
 
 void
@@ -123,12 +121,14 @@ vm_evict_frame (void) {
  * space.*/
 static struct frame *
 vm_get_frame (void) {
-	struct frame *frame = malloc(sizeof(struct frame));
-	
-	if(frame == NULL){
-		return NULL;
-	}
-	frame->kva = palloc_get_page(PAL_USER);
+	struct frame *frame = (struct frame *) malloc (sizeof (struct frame)); // 함수가 종료되어도 사라지지 않는 메모리 공간을 할당해서 프레임을 설정해라
+	if (frame == NULL)
+		PANIC ("todo");
+
+	frame->kva = palloc_get_page (PAL_USER);
+	if (frame->kva == NULL)
+		PANIC ("todo");
+
 	frame->page = NULL;
 
 	return frame;
@@ -166,7 +166,7 @@ vm_dealloc_page (struct page *page) {
 
 /* Claim the page that allocate on VA. */
 bool
-vm_claim_page (void *va UNUSED) {
+vm_claim_page (void *va) {
 	struct page *page = NULL;
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 
@@ -201,10 +201,27 @@ vm_do_claim_page (struct page *page) {
 	return swap_in (page, frame->kva);
 }
 
+/* Returns a hash value for page p. */
+unsigned
+page_hash (const struct hash_elem *p_, void *aux UNUSED) {
+	const struct page *p = hash_entry (p_, struct page, hash_elem);
+	return hash_bytes (&p->va, sizeof p->va);
+}
+
+/* Returns true if page a precedes page b. */
+bool
+page_less (const struct hash_elem *a_,
+           const struct hash_elem *b_, void *aux UNUSED) {
+	const struct page *a = hash_entry (a_, struct page, hash_elem);
+	const struct page *b = hash_entry (b_, struct page, hash_elem);
+
+	return a->va < b->va;
+}
+
 /* Initialize new supplemental page table */
 void
-supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
-	hash_init(spt->hash_table, hash_convert_int, hash_list_sort, NULL);
+supplemental_page_table_init (struct supplemental_page_table *spt) {
+	hash_init (&spt->spt_entry, page_hash, page_less, NULL);
 }
 
 /* Copy supplemental page table from src to dst */
@@ -218,20 +235,4 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
-}
-
-static bool 
-hash_list_sort(const struct hash_elem *a, 
-	const struct hash_elem *b, void *aux UNUSED){
-		struct page *page_a = hash_entry(a, struct page, hash_elem);
-		struct page *page_b = hash_entry(b, struct page, hash_elem);
-
-		return page_a->va < page_b->va;
-	}
-
-static int 
-hash_convert_int(const struct hash_elem *elem, void *aux UNUSED){
-	struct page *page_elem = hash_entry(elem, struct page, hash_elem);
-
-	return hash_int(page_elem->va);
 }
