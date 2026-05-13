@@ -3,7 +3,9 @@
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
-#include "threads/vaddr.h" // round 함수 사용 위함
+#include "lib/kernel/hash.h"
+#include "threads/vaddr.h"
+#include "threads/mmu.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -37,6 +39,8 @@ page_get_type (struct page *page) {
 static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
+static bool hash_list_sort(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
+static int hash_convert_int(const struct hash_elem *elem, void *aux UNUSED);
 
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
@@ -65,32 +69,25 @@ err:
 struct page *
 spt_find_page (struct supplemental_page_table *spt, void *va) {
 	struct page page;
-	struct hash_elem *elem;
-	
-	page.va = pg_round_down(va);
-	elem = hash_find (&spt->page_entry, &page.hash_elem);
+	struct hash_elem *elem = NULL;
+
+	page.va = pg_round_down (va);
+	elem = hash_find (&spt->spt_entry, &page.hash_elem);
 
 	if (elem == NULL)
-		return NULL;	
+		return NULL;
 
-	return hash_entry(elem, struct page, hash_elem);
+	return hash_entry (elem, struct page, hash_elem);
 }
 
 /* Insert PAGE into spt with validation. */
 bool
 spt_insert_page (struct supplemental_page_table *spt,
-		struct page *page) {
-	bool succ = false;
-	ASSERT(page != NULL);
-	/* insert에서 page->va를 pg_round_down으로 보정하지 않고 검증만 한다.
-	* page 객체 자체가 항상 page-aligned va를 갖도록 유지해야,
-	* 잘못 생성된 page를 빨리 발견할 수 있고 설계가 명확해짐. */
-	ASSERT(page->va == pg_round_down(page->va)); // 왜 이 값을 바로 넣지 않고, 검증을 하는가? >> 삽입 함수에서 정규화하는 것보다, page 객체 자체가 항상 정규화된 주소를 갖도록 유지하는 게 더 디버깅하기 좋고 설계도 명확하기 때문.
-	
-	if (hash_insert(&spt->page_entry, &page->hash_elem) == NULL)
-		succ = true;
-
-	return succ;
+                 struct page *page) {
+	if (hash_insert (&spt->spt_entry, &page->hash_elem) == NULL)
+		return true;
+	else
+		return false;
 }
 
 void
@@ -124,11 +121,16 @@ vm_evict_frame (void) {
  * space.*/
 static struct frame *
 vm_get_frame (void) {
-	struct frame *frame = NULL;
-	/* TODO: Fill this function. */
+	struct frame *frame = (struct frame *) malloc (sizeof (struct frame)); // 함수가 종료되어도 사라지지 않는 메모리 공간을 할당해서 프레임을 설정해라
+	if (frame == NULL)
+		PANIC ("todo");
 
-	ASSERT (frame != NULL);
-	ASSERT (frame->page == NULL);
+	frame->kva = palloc_get_page (PAL_USER);
+	if (frame->kva == NULL)
+		PANIC ("todo");
+
+	frame->page = NULL;
+
 	return frame;
 }
 
@@ -164,10 +166,15 @@ vm_dealloc_page (struct page *page) {
 
 /* Claim the page that allocate on VA. */
 bool
-vm_claim_page (void *va UNUSED) {
+vm_claim_page (void *va) {
 	struct page *page = NULL;
-	/* TODO: Fill this function */
+	struct supplemental_page_table *spt = &thread_current ()->spt;
 
+	page = spt_find_page(spt, va);
+
+	if(page == NULL){
+		return false;
+	}
 	return vm_do_claim_page (page);
 }
 
@@ -176,36 +183,45 @@ static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
 
+	if(frame == NULL){
+		return false;
+	}
+
 	/* Set links */
 	frame->page = page;
 	page->frame = frame;
 
-	/* TODO: Insert page table entry to map page's VA to frame's PA. */
+	if(!pml4_set_page (thread_current()->pml4, page->va, frame->kva, true)){
+		palloc_free_page(frame->kva);
+		free(frame);
+
+		return false;
+	};
 
 	return swap_in (page, frame->kva);
+}
+
+/* Returns a hash value for page p. */
+unsigned
+page_hash (const struct hash_elem *p_, void *aux UNUSED) {
+	const struct page *p = hash_entry (p_, struct page, hash_elem);
+	return hash_bytes (&p->va, sizeof p->va);
 }
 
 /* Returns true if page a precedes page b. */
 bool
 page_less (const struct hash_elem *a_,
            const struct hash_elem *b_, void *aux UNUSED) {
-  const struct page *a = hash_entry (a_, struct page, hash_elem);
-  const struct page *b = hash_entry (b_, struct page, hash_elem);
+	const struct page *a = hash_entry (a_, struct page, hash_elem);
+	const struct page *b = hash_entry (b_, struct page, hash_elem);
 
-  return a->va < b->va;
-}
-
-/* Returns a hash value for page p. */
-unsigned
-page_hash (const struct hash_elem *p_, void *aux UNUSED) {
-  const struct page *p = hash_entry (p_, struct page, hash_elem);
-  return hash_bytes (&p->va, sizeof p->va);
+	return a->va < b->va;
 }
 
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt) {
-	hash_init(&spt->page_entry, page_hash, page_less, NULL);
+	hash_init (&spt->spt_entry, page_hash, page_less, NULL);
 }
 
 /* Copy supplemental page table from src to dst */

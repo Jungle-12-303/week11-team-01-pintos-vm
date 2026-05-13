@@ -2,7 +2,6 @@
 #define VM_VM_H
 #include <stdbool.h>
 #include "threads/palloc.h"
-#include "hash.h"
 
 enum vm_type {
 	/* 아직 초기화되지 않은 페이지 */
@@ -28,6 +27,7 @@ enum vm_type {
 #include "vm/uninit.h"
 #include "vm/anon.h"
 #include "vm/file.h"
+#include "lib/kernel/hash.h"
 #ifdef EFILESYS
 #include "filesys/page_cache.h"
 #endif
@@ -44,12 +44,12 @@ struct thread;
  * 이 구조체의 미리 정의된 멤버는 삭제하거나 수정하지 말 것. */
 struct page {
 	const struct page_operations *operations;
-	void *va;              /* 가상 주소 */
+	void *va;              /* 유저 공간 기준 주소 */
 	struct frame *frame;   /* frame에서 page로 되돌아오는 참조 */
 
-	/* 구현부 */
-	struct hash_elem hash_elem; // 해시테이블에 걸 수 있는 고리
-
+	/* 구현부 */	
+  struct hash_elem hash_elem;
+  
 	/* 타입별 데이터는 union에 묶여 있다.
 	 * 각 함수는 현재 어떤 union 멤버를 써야 하는지 자동으로 판단한다. */
 	union {
@@ -88,7 +88,9 @@ struct page_operations {
  * 이 구조체 설계는 특정 방식으로 강제하지 않는다.
  * 설계는 전적으로 구현자 선택이다. */
 struct supplemental_page_table {
-	struct hash page_entry;
+	// 페이지리스트
+	// hashtable할것이다
+	struct hash spt_entry;
 };
 
 #include "threads/thread.h"

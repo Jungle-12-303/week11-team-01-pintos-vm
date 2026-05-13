@@ -125,7 +125,7 @@ timer_print_stats (void) {
 
 /* 타이머 인터럽트 핸들러. */
 static void
-timer_interrupt (struct intr_frame *args) {
+timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
 	/* phase 1: alarm-clock 구현 */
