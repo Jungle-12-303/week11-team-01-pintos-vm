@@ -3,6 +3,7 @@
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
+#include "lib/kernel/hash.h"
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
 
@@ -38,6 +39,8 @@ page_get_type (struct page *page) {
 static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
+static bool hash_list_sort(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
+static int hash_convert_int(const struct hash_elem *elem, void *aux UNUSED);
 
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
@@ -69,7 +72,7 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 	struct hash_elem *elem = NULL;
 
 	page.va = pg_round_down (va);
-	elem = hash_find (&spt->spt_list, &page.hash_elem);
+	elem = hash_find (&spt->spt_entry, &page.hash_elem);
 
 	if (elem == NULL)
 		return NULL;
@@ -81,7 +84,7 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 bool
 spt_insert_page (struct supplemental_page_table *spt,
                  struct page *page) {
-	if (hash_insert (&spt->spt_list, &page->hash_elem) == NULL)
+	if (hash_insert (&spt->spt_entry, &page->hash_elem) == NULL)
 		return true;
 	else
 		return false;
@@ -128,8 +131,6 @@ vm_get_frame (void) {
 
 	frame->page = NULL;
 
-	ASSERT (frame != NULL);
-	ASSERT (frame->page == NULL);
 	return frame;
 }
 
@@ -167,10 +168,13 @@ vm_dealloc_page (struct page *page) {
 bool
 vm_claim_page (void *va) {
 	struct page *page = NULL;
-	struct supplemental_page_table *supplemental_page_table = &thread_current ()->spt;
-	page = spt_find_page (supplemental_page_table, va);
-	if (page == NULL)
+	struct supplemental_page_table *spt = &thread_current ()->spt;
+
+	page = spt_find_page(spt, va);
+
+	if(page == NULL){
 		return false;
+	}
 	return vm_do_claim_page (page);
 }
 
@@ -179,11 +183,21 @@ static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
 
+	if(frame == NULL){
+		return false;
+	}
+
 	/* Set links */
 	frame->page = page;
 	page->frame = frame;
 
-	pml4_set_page (thread_current ()->pml4, page->va, frame->kva, true);
+	if(!pml4_set_page (thread_current()->pml4, page->va, frame->kva, true)){
+		palloc_free_page(frame->kva);
+		free(frame);
+
+		return false;
+	};
+
 	return swap_in (page, frame->kva);
 }
 
@@ -207,7 +221,7 @@ page_less (const struct hash_elem *a_,
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt) {
-	hash_init (&spt->spt_list, page_hash, page_less, NULL);
+	hash_init (&spt->spt_entry, page_hash, page_less, NULL);
 }
 
 /* Copy supplemental page table from src to dst */
