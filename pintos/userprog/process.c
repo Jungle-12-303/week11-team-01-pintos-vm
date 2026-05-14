@@ -23,6 +23,7 @@
 #include "intrinsic.h"
 #ifdef VM
 #include "vm/vm.h"
+
 #endif
 
 static void process_cleanup (void);
@@ -1166,17 +1167,31 @@ install_page (void *upage, void *kpage, bool writable) {
  * project 2만을 위한 함수를 구현하려면 위쪽 블록에 구현하라.
  */
 
+struct lazy_load_aux {
+	struct file *file;
+	off_t ofs;
+	size_t page_read_bytes;
+	size_t page_zero_bytes;
+};
+
 static bool
 lazy_load_segment (struct page *page, void *aux) {
-	/*
-	 * TODO: 파일에서 세그먼트를 로드하라.
-	 */
-	/*
-	 * TODO: 이 함수는 VA 주소에서 첫 번째 페이지 폴트가 발생했을 때 호출된다.
-	 */
-	/*
-	 * TODO: 이 함수를 호출할 때 VA를 사용할 수 있다.
-	 */
+	struct lazy_load_aux *lazy_aux = (struct lazy_load_aux *) aux;
+	void *kva = page->frame->kva;
+
+  if (file_read_at (
+	            lazy_aux->file,
+	            kva,
+	            lazy_aux->page_read_bytes,
+	            lazy_aux->ofs) != (off_t) lazy_aux->page_read_bytes)
+
+	{
+		free (lazy_aux);
+		return false;
+	}
+	memset ((uint8_t *) kva + lazy_aux->page_read_bytes, 0, lazy_aux->page_zero_bytes);
+	free (lazy_aux);
+	return true;
 }
 
 /*
@@ -1210,20 +1225,22 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		/*
-		 * TODO: lazy_load_segment에 정보를 전달할 aux를 설정하라.
-		 */
+		struct lazy_load_aux *lazy_load_aux = malloc (sizeof (struct lazy_load_aux));
+
+		lazy_load_aux->file = file_reopen (file);
+		lazy_load_aux->ofs = ofs;
+		lazy_load_aux->page_read_bytes = page_read_bytes;
+		lazy_load_aux->page_zero_bytes = page_zero_bytes;
+
 		void *aux = NULL;
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
-		                                     lazy_load_segment, aux))
+		                                     lazy_load_segment, lazy_load_aux))
 			return false;
 
-		/*
-		 * 다음 페이지로 진행한다.
-		 */
-		read_bytes -= page_read_bytes;
-		zero_bytes -= page_zero_bytes;
+		read_bytes -= page_read_bytes; // 6 - 4. 2.
+		zero_bytes -= page_zero_bytes; // 0
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	return true;
 }
@@ -1248,7 +1265,6 @@ setup_stack (struct intr_frame *if_) {
 	return success;
 }
 #endif /* VM */
-
 
 /* 구현이 안된 이 함수를 넣으라고 함 */
 /* PHDR이 유효한 로드 가능한 세그먼트인지 확인하고 true를 반환합니다. */
