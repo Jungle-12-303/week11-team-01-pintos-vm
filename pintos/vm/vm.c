@@ -195,9 +195,11 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	/* 먼저 validation을 수행한다
 	   case 1: 커널 영역을 건들면 아웃
 	   case 2: 메모리는 충분히 있는데 다른 이유로 터졌으니 아웃
-	   case 3: 끝 주소에서 8바이트 초과 벗어나면 아웃 */
+	   case 3: addr와 rsp값이 근접 안하면 아웃 */
 	if(!is_user_vaddr(addr)) return false;
 	if(!not_present) return false;
+	// if(!addr_range_check(f, addr)) return false;
+
 	
 	/* 장부에 페이지가 있는 지 확인 */
 	struct page *page = spt_find_page(spt, addr);

@@ -1230,7 +1230,7 @@ lazy_load_segment (struct page *page, void *aux) {
 
 	/* frame을 read_bytes만큼 읽어서 내용을 채운다 */
 	if(file_read_at(file, Kva, read_bytes, ofs) == read_bytes){
-		install_page(page->va, Kva, true);
+		// install_page(page->va, Kva, true);
 		succ = true;
 	}
 
@@ -1287,7 +1287,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
-		ofs += PGSIZE;
+		/* 디스크 기준 읽는 지점을 말한다 */
+		ofs += page_read_bytes;
 	}
 	return true;
 }
