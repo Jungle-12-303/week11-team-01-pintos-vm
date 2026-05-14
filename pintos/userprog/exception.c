@@ -6,6 +6,9 @@
 #include "threads/thread.h"
 #include "intrinsic.h"
 
+/* 추가 임포트 */
+#include "userprog/syscall.h"
+
 /*
  * 처리된 페이지 폴트의 개수.
  */
@@ -14,6 +17,8 @@ static long long page_fault_cnt;
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
 
+/* 추가 선언 */
+void exit(int status);
 /*
  * 유저 프로그램이 일으킬 수 있는 인터럽트에 대한 핸들러를 등록한다.
  *
@@ -196,6 +201,10 @@ page_fault (struct intr_frame *f) {
 			not_present ? "not present" : "rights violation",
 			write ? "writing" : "reading",
 			user ? "user" : "kernel");
-	kill (f);
+	
+	if(user)
+		exit(-1);
+	else
+		kill (f);
 }
 

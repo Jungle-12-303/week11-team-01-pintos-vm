@@ -198,14 +198,15 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	   case 3: addr와 rsp값이 근접 안하면 아웃 */
 	if(!is_user_vaddr(addr)) return false;
 	if(!not_present) return false;
-	// if(!addr_range_check(f, addr)) return false;
 
-	
 	/* 장부에 페이지가 있는 지 확인 */
 	struct page *page = spt_find_page(spt, addr);
 	if(page != NULL){
 	 	return vm_do_claim_page (page);
 	}
+
+	/* 일단 여기에 넣어야 한다고.. 추후 학습하기 */
+	if(!addr_range_check(f, addr)) return false;
 
 	vm_stack_growth(addr);
 	return true;
