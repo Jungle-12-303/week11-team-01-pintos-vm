@@ -43,6 +43,15 @@ struct initd_args {
 	struct child_status *cs; // 부모가 만든 자식 상태 레코드
 };
 
+struct aux_args {
+	struct file *file;
+	off_t ofs;
+	uint8_t *page;
+	uint32_t read_bytes;
+	uint32_t zero_bytes;
+	bool writable;
+};
+
 /* fd_table 최대 슬롯 수 (4KB 페이지 / 포인터 크기). */
 #define FD_MAX (PGSIZE / sizeof (struct file *))
 
@@ -1168,15 +1177,30 @@ install_page (void *upage, void *kpage, bool writable) {
 
 static bool
 lazy_load_segment (struct page *page, void *aux) {
+	struct aux_args *auxs = aux;
+	
+	struct file *file = auxs->file;
+	off_t ofs = auxs->ofs;
+	uint32_t read_bytes = auxs->read_bytes;
+	// uint32_t zero_bytes = auxs->zero_bytes;
+	// bool writable = auxs->writable;
+	bool succ = false;
 	/*
 	 * TODO: 파일에서 세그먼트를 로드하라.
 	 */
+	memset(page->frame->kva, 0, PGSIZE);
+
 	/*
 	 * TODO: 이 함수는 VA 주소에서 첫 번째 페이지 폴트가 발생했을 때 호출된다.
 	 */
+	if (file_read_at(file, page->frame->kva, read_bytes, ofs) == read_bytes){
+		succ = true;
+	}
 	/*
 	 * TODO: 이 함수를 호출할 때 VA를 사용할 수 있다.
 	 */
+	free(auxs);
+	return succ;
 }
 
 /*
@@ -1213,7 +1237,15 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/*
 		 * TODO: lazy_load_segment에 정보를 전달할 aux를 설정하라.
 		 */
-		void *aux = NULL;
+
+		struct aux_args *aux = malloc(sizeof(struct aux_args));
+		aux->file = file;
+		aux->ofs = ofs;
+		aux->page = upage;
+		aux->read_bytes = page_read_bytes;
+		aux->zero_bytes = page_zero_bytes;
+		aux->writable = writable;
+
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
 		                                     lazy_load_segment, aux))
 			return false;
@@ -1224,6 +1256,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	return true;
 }
@@ -1283,4 +1316,16 @@ validate_segment (const struct Phdr *phdr, struct file *file) {
 
 	/* 괜찮은 것 같습니다. */
 	return true;
+}
+
+static bool
+install_page (void *upage, void *kpage, bool writable) {
+	struct thread *t = thread_current ();
+
+	/*
+	 * 그 가상 주소에 이미 페이지가 없는지 확인한 뒤, 그 위치에 페이지를
+	 * 매핑한다.
+	 */
+	return (pml4_get_page (t->pml4, upage) == NULL &&
+	        pml4_set_page (t->pml4, upage, kpage, writable));
 }
