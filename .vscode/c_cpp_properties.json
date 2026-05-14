@@ -3,7 +3,7 @@
         {
             "name": "PintOS (DevContainer)",
             "defines": [
-                //"USERPROG",
+                "USERPROG",
                 "VM",
                 "FILESYS"
             ],

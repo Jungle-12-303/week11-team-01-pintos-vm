@@ -44,13 +44,14 @@ struct thread;
  * 이 구조체의 미리 정의된 멤버는 삭제하거나 수정하지 말 것. */
 struct page {
 	const struct page_operations *operations;
-	void *va;              /* 유저 공간 기준 주소 */
-	struct frame *frame;   /* frame에서 page로 되돌아오는 참조 */
+	void *va;            /* 유저 공간 기준 주소 */
+	struct frame *frame; /* frame에서 page로 되돌아오는 참조 */
 
-	/* 구현부 */	
-  	struct hash_elem hash_elem;
+	/* 구현부 */
+	struct hash_elem hash_elem;
 	bool writable;
-  
+	void *buffer;
+
 	/* 타입별 데이터는 union에 묶여 있다.
 	 * 각 함수는 현재 어떤 union 멤버를 써야 하는지 자동으로 판단한다. */
 	union {
@@ -81,9 +82,10 @@ struct page_operations {
 };
 
 #define swap_in(page, v) (page)->operations->swap_in ((page), v)
-#define swap_out(page) (page)->operations->swap_out (page)
-#define destroy(page) \
-	if ((page)->operations->destroy) (page)->operations->destroy (page)
+#define swap_out(page)   (page)->operations->swap_out (page)
+#define destroy(page)                \
+	if ((page)->operations->destroy) \
+	(page)->operations->destroy (page)
 
 /* 현재 프로세스 메모리 공간의 표현.
  * 이 구조체 설계는 특정 방식으로 강제하지 않는다.
@@ -97,23 +99,23 @@ struct supplemental_page_table {
 #include "threads/thread.h"
 void supplemental_page_table_init (struct supplemental_page_table *spt);
 bool supplemental_page_table_copy (struct supplemental_page_table *dst,
-		struct supplemental_page_table *src);
+                                   struct supplemental_page_table *src);
 void supplemental_page_table_kill (struct supplemental_page_table *spt);
 struct page *spt_find_page (struct supplemental_page_table *spt,
-		void *va);
+                            void *va);
 bool spt_insert_page (struct supplemental_page_table *spt, struct page *page);
 void spt_remove_page (struct supplemental_page_table *spt, struct page *page);
 
 void vm_init (void);
 bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user,
-		bool write, bool not_present);
+                          bool write, bool not_present);
 
 #define vm_alloc_page(type, upage, writable) \
 	vm_alloc_page_with_initializer ((type), (upage), (writable), NULL, NULL)
 bool vm_alloc_page_with_initializer (enum vm_type type, void *upage,
-		bool writable, vm_initializer *init, void *aux);
+                                     bool writable, vm_initializer *init, void *aux);
 void vm_dealloc_page (struct page *page);
 bool vm_claim_page (void *va);
 enum vm_type page_get_type (struct page *page);
 
-#endif  /* VM_VM_H */
+#endif /* VM_VM_H */

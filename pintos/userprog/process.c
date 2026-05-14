@@ -23,6 +23,7 @@
 #include "intrinsic.h"
 #ifdef VM
 #include "vm/vm.h"
+
 #endif
 
 static void process_cleanup (void);
@@ -41,15 +42,6 @@ struct fork_args {
 struct initd_args {
 	char *file_name;         // 실행할 프로그램 이름 복사본
 	struct child_status *cs; // 부모가 만든 자식 상태 레코드
-};
-
-struct aux_args {
-	struct file *file;
-	off_t ofs;
-	uint8_t *page;
-	uint32_t read_bytes;
-	uint32_t zero_bytes;
-	bool writable;
 };
 
 /* fd_table 최대 슬롯 수 (4KB 페이지 / 포인터 크기). */
@@ -1175,32 +1167,31 @@ install_page (void *upage, void *kpage, bool writable) {
  * project 2만을 위한 함수를 구현하려면 위쪽 블록에 구현하라.
  */
 
+struct lazy_load_aux {
+	struct file *file;
+	off_t ofs;
+	size_t page_read_bytes;
+	size_t page_zero_bytes;
+};
+
 static bool
 lazy_load_segment (struct page *page, void *aux) {
-	struct aux_args *auxs = aux;
-	
-	struct file *file = auxs->file;
-	off_t ofs = auxs->ofs;
-	uint32_t read_bytes = auxs->read_bytes;
-	// uint32_t zero_bytes = auxs->zero_bytes;
-	// bool writable = auxs->writable;
-	bool succ = false;
-	/*
-	 * TODO: 파일에서 세그먼트를 로드하라.
-	 */
-	memset(page->frame->kva, 0, PGSIZE);
+	struct lazy_load_aux *lazy_aux = (struct lazy_load_aux *) aux;
+	void *kva = page->frame->kva;
 
-	/*
-	 * TODO: 이 함수는 VA 주소에서 첫 번째 페이지 폴트가 발생했을 때 호출된다.
-	 */
-	if (file_read_at(file, page->frame->kva, read_bytes, ofs) == read_bytes){
-		succ = true;
+  if (file_read_at (
+	            lazy_aux->file,
+	            kva,
+	            lazy_aux->page_read_bytes,
+	            lazy_aux->ofs) != (off_t) lazy_aux->page_read_bytes)
+
+	{
+		free (lazy_aux);
+		return false;
 	}
-	/*
-	 * TODO: 이 함수를 호출할 때 VA를 사용할 수 있다.
-	 */
-	free(auxs);
-	return succ;
+	memset ((uint8_t *) kva + lazy_aux->page_read_bytes, 0, lazy_aux->page_zero_bytes);
+	free (lazy_aux);
+	return true;
 }
 
 /*
@@ -1234,27 +1225,20 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		/*
-		 * TODO: lazy_load_segment에 정보를 전달할 aux를 설정하라.
-		 */
+		struct lazy_load_aux *lazy_load_aux = malloc (sizeof (struct lazy_load_aux));
 
-		struct aux_args *aux = malloc(sizeof(struct aux_args));
-		aux->file = file;
-		aux->ofs = ofs;
-		aux->page = upage;
-		aux->read_bytes = page_read_bytes;
-		aux->zero_bytes = page_zero_bytes;
-		aux->writable = writable;
+		lazy_load_aux->file = file_reopen (file);
+		lazy_load_aux->ofs = ofs;
+		lazy_load_aux->page_read_bytes = page_read_bytes;
+		lazy_load_aux->page_zero_bytes = page_zero_bytes;
 
+		void *aux = NULL;
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
-		                                     lazy_load_segment, aux))
+		                                     lazy_load_segment, lazy_load_aux))
 			return false;
 
-		/*
-		 * 다음 페이지로 진행한다.
-		 */
-		read_bytes -= page_read_bytes;
-		zero_bytes -= page_zero_bytes;
+		read_bytes -= page_read_bytes; // 6 - 4. 2.
+		zero_bytes -= page_zero_bytes; // 0
 		upage += PGSIZE;
 		ofs += page_read_bytes;
 	}
@@ -1281,7 +1265,6 @@ setup_stack (struct intr_frame *if_) {
 	return success;
 }
 #endif /* VM */
-
 
 /* 구현이 안된 이 함수를 넣으라고 함 */
 /* PHDR이 유효한 로드 가능한 세그먼트인지 확인하고 true를 반환합니다. */
@@ -1316,16 +1299,4 @@ validate_segment (const struct Phdr *phdr, struct file *file) {
 
 	/* 괜찮은 것 같습니다. */
 	return true;
-}
-
-static bool
-install_page (void *upage, void *kpage, bool writable) {
-	struct thread *t = thread_current ();
-
-	/*
-	 * 그 가상 주소에 이미 페이지가 없는지 확인한 뒤, 그 위치에 페이지를
-	 * 매핑한다.
-	 */
-	return (pml4_get_page (t->pml4, upage) == NULL &&
-	        pml4_set_page (t->pml4, upage, kpage, writable));
 }
