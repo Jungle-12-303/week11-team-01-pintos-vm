@@ -1216,25 +1216,27 @@ static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* aux 구조체 해제 */
 	struct load_info *info = aux;
+	
 	struct file *file = info->file;
 	off_t ofs = info->ofs;
 	uint32_t read_bytes = info->read_bytes;
 	uint32_t zero_bytes = info->zero_bytes;
 	void *Kva = page->frame->kva;
 
-
-	/* 최소구현 */
-	file_seek(file, ofs);
-	/* 실행 파일의 내용물을 램에 적재한다 */
-	file_read(file, Kva, read_bytes);
-	/* 나머지 page 여분을 0으로 채워버린다 */
-	memset(Kva + read_bytes, 0, zero_bytes);
+	bool succ = false;
 	
-	/* 마무리 작업 */
+	/* 먼저 페이지의 frame 전체를 0으로 채운다 */
+	memset(Kva, 0, PGSIZE);
+
+	/* frame을 read_bytes만큼 읽어서 내용을 채운다 */
+	if(file_read_at(file, Kva, read_bytes, ofs) == read_bytes){
+		install_page(page->va, Kva, true);
+		succ = true;
+	}
+
 	file_close(info->file);
 	free(info);
-	
-	return true;
+	return succ;
 }
 
 /*

@@ -51,6 +51,7 @@ static struct frame *vm_evict_frame (void);
 /* 추가 구현 헬퍼 함수? */
 unsigned page_hash(const struct hash_elem *e, void *aux);
 bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux);
+bool addr_range_check(struct intr_frame *f, void *addr);
 
 
 
@@ -76,6 +77,9 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 			case VM_ANON:
 				/* uninit이 무엇인지.. 추후에 이해가 중요하다 => 나중에 호출됨 */
 				uninit_new(page, upage, init, type, aux, anon_initializer);
+				break;
+			case VM_FILE:
+				uninit_new(page, upage, init, type, aux, file_backed_initializer);
 				break;
 			default:
 				break;
@@ -190,7 +194,8 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	/* 먼저 validation을 수행한다
 	   case 1: 커널 영역을 건들면 아웃
-	   case 2: 메모리는 충분히 있는데 다른 이유로 터졌으니 아웃 */
+	   case 2: 메모리는 충분히 있는데 다른 이유로 터졌으니 아웃
+	   case 3: 끝 주소에서 8바이트 초과 벗어나면 아웃 */
 	if(!is_user_vaddr(addr)) return false;
 	if(!not_present) return false;
 	
@@ -266,15 +271,24 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 }
 
 /* hash_page init을 위한 추가 구현부입니다 */
-unsigned page_hash(const struct hash_elem *e, void *aux){
+unsigned 
+page_hash(const struct hash_elem *e, void *aux){
 	struct page *p = hash_entry(e, struct page, hash_elem);
 	/* 주소 => 숫자로 변환 */
 	return hash_int(p->va);
 }
 
-bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux){
+bool 
+page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux){
 	struct page *pa = hash_entry(a, struct page, hash_elem);
 	struct page *pb = hash_entry(b, struct page, hash_elem);
 	/* 오름차순 구현: 페이지의 시작 addr를 기준으로 */
 	return pa->va < pb->va;
+}
+
+/* 예외처리 helper 함수입니다 */
+bool
+addr_range_check(struct intr_frame *f, void *addr){
+	if(addr < f->rsp - 32) return false;
+	return true;
 }
