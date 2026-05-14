@@ -1179,16 +1179,12 @@ lazy_load_segment (struct page *page, void *aux) {
 	struct lazy_load_aux *lazy_aux = (struct lazy_load_aux *) aux;
 	void *kva = page->frame->kva;
 
-	if (file_read_at(lazy_aux->file, kva, lazy_aux->page_read_bytes,
-					 lazy_aux->ofs) != (off_t)lazy_aux->page_read_bytes)
-
-	{
+	if (file_read_at(lazy_aux->file, kva, lazy_aux->page_read_bytes, lazy_aux->ofs) != (off_t)lazy_aux->page_read_bytes) {
 		file_close(lazy_aux->file);
 		free(lazy_aux);
 		return false;
 	}
-	memset((uint8_t*)kva + lazy_aux->page_read_bytes, 0,
-		   lazy_aux->page_zero_bytes);
+	memset((uint8_t*)kva + lazy_aux->page_read_bytes, 0, lazy_aux->page_zero_bytes);
 	file_close(lazy_aux->file);
 	free(lazy_aux);
 	return true;
