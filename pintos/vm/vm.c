@@ -13,7 +13,7 @@ void
 vm_init (void) {
 	vm_anon_init ();
 	vm_file_init ();
-#ifdef EFILESYS  /* For project 4 */
+#ifdef EFILESYS /* For project 4 */
 	pagecache_init ();
 #endif
 	register_inspect_intr ();
@@ -28,10 +28,10 @@ enum vm_type
 page_get_type (struct page *page) {
 	int ty = VM_TYPE (page->operations->type);
 	switch (ty) {
-		case VM_UNINIT:
-			return VM_TYPE (page->uninit.type);
-		default:
-			return ty;
+	case VM_UNINIT:
+		return VM_TYPE (page->uninit.type);
+	default:
+		return ty;
 	}
 }
 
@@ -39,17 +39,16 @@ page_get_type (struct page *page) {
 static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
-static bool hash_list_sort(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
-static int hash_convert_int(const struct hash_elem *elem, void *aux UNUSED);
+static bool hash_list_sort (const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
+static int hash_convert_int (const struct hash_elem *elem, void *aux UNUSED);
 
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
  * `vm_alloc_page`. */
 bool
-vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
-		vm_initializer *init, void *aux) {
-
-	ASSERT (VM_TYPE(type) != VM_UNINIT)
+vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable, vm_initializer *init, void *aux) {
+	ASSERT (VM_TYPE (type) != VM_UNINIT);
+	ASSERT (pg_round_down (upage) == upage);
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 
@@ -58,8 +57,28 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
+		struct page *page = malloc (sizeof (struct page));
+		switch (type) {
+		case VM_ANON:
+			uninit_new (page, upage, init, type, aux, &anon_initializer);
+			break;
+		case VM_FILE:
+			uninit_new (page, upage, init, type, aux, &file_backed_initializer);
+			break;
+
+		default:
+			free (page);
+			return false;
+		}
+
+		page->writable = writable;
 
 		/* TODO: Insert the page into the spt. */
+		if (!spt_insert_page (spt, page)) {
+			free (page);
+			return false;
+		}
+		return true;
 	}
 err:
 	return false;
@@ -100,7 +119,7 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
-	 /* TODO: The policy for eviction is up to you. */
+	/* TODO: The policy for eviction is up to you. */
 
 	return victim;
 }
@@ -147,7 +166,7 @@ vm_handle_wp (struct page *page UNUSED) {
 /* Return true on success */
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
-		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
+                     bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
@@ -170,9 +189,9 @@ vm_claim_page (void *va) {
 	struct page *page = NULL;
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 
-	page = spt_find_page(spt, va);
+	page = spt_find_page (spt, va);
 
-	if(page == NULL){
+	if (page == NULL) {
 		return false;
 	}
 	return vm_do_claim_page (page);
@@ -183,7 +202,7 @@ static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
 
-	if(frame == NULL){
+	if (frame == NULL) {
 		return false;
 	}
 
@@ -191,9 +210,9 @@ vm_do_claim_page (struct page *page) {
 	frame->page = page;
 	page->frame = frame;
 
-	if(!pml4_set_page (thread_current()->pml4, page->va, frame->kva, true)){
-		palloc_free_page(frame->kva);
-		free(frame);
+	if (!pml4_set_page (thread_current ()->pml4, page->va, frame->kva, true)) {
+		palloc_free_page (frame->kva);
+		free (frame);
 
 		return false;
 	};
@@ -227,7 +246,7 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 /* Copy supplemental page table from src to dst */
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-		struct supplemental_page_table *src UNUSED) {
+                              struct supplemental_page_table *src UNUSED) {
 }
 
 /* Free the resource hold by the supplemental page table */
