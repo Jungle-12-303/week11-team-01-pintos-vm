@@ -1179,18 +1179,14 @@ lazy_load_segment (struct page *page, void *aux) {
 	struct lazy_load_aux *lazy_aux = (struct lazy_load_aux *) aux;
 	void *kva = page->frame->kva;
 
-  if (file_read_at (
-	            lazy_aux->file,
-	            kva,
-	            lazy_aux->page_read_bytes,
-	            lazy_aux->ofs) != (off_t) lazy_aux->page_read_bytes)
-
-	{
-		free (lazy_aux);
+	if (file_read_at(lazy_aux->file, kva, lazy_aux->page_read_bytes, lazy_aux->ofs) != (off_t)lazy_aux->page_read_bytes) {
+		file_close(lazy_aux->file);
+		free(lazy_aux);
 		return false;
 	}
-	memset ((uint8_t *) kva + lazy_aux->page_read_bytes, 0, lazy_aux->page_zero_bytes);
-	free (lazy_aux);
+	memset((uint8_t*)kva + lazy_aux->page_read_bytes, 0, lazy_aux->page_zero_bytes);
+	file_close(lazy_aux->file);
+	free(lazy_aux);
 	return true;
 }
 
@@ -1226,16 +1222,26 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		struct lazy_load_aux *lazy_load_aux = malloc (sizeof (struct lazy_load_aux));
+		
+		if (lazy_load_aux == NULL)
+			return false;
 
 		lazy_load_aux->file = file_reopen (file);
+
+		if (lazy_load_aux->file == NULL) {
+			free (lazy_load_aux);
+			return false;
+		}
+
 		lazy_load_aux->ofs = ofs;
 		lazy_load_aux->page_read_bytes = page_read_bytes;
 		lazy_load_aux->page_zero_bytes = page_zero_bytes;
 
-		void *aux = NULL;
-		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
-		                                     lazy_load_segment, lazy_load_aux))
+		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, lazy_load_aux)) {
+			file_close(lazy_load_aux->file);
+			free(lazy_load_aux);
 			return false;
+		}
 
 		read_bytes -= page_read_bytes; // 6 - 4. 2.
 		zero_bytes -= page_zero_bytes; // 0
