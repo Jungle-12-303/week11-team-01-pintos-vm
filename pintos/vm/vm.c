@@ -54,11 +54,9 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable, v
 
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, upage) == NULL) {
-		/* TODO: Create the page, fetch the initialier according to the VM type,
-		 * TODO: and then create "uninit" page struct by calling uninit_new. You
-		 * TODO: should modify the field after calling the uninit_new. */
 		struct page *page = malloc (sizeof (struct page));
-		switch (type) {
+    
+		switch (VM_TYPE(type)) {
 		case VM_ANON:
 			uninit_new (page, upage, init, type, aux, &anon_initializer);
 			break;
@@ -73,7 +71,6 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable, v
 
 		page->writable = writable;
 
-		/* TODO: Insert the page into the spt. */
 		if (!spt_insert_page (spt, page)) {
 			free (page);
 			return false;

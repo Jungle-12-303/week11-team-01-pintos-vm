@@ -1176,21 +1176,10 @@ struct lazy_load_aux {
 
 static bool
 lazy_load_segment (struct page *page, void *aux) {
-	/*
-	 * TODO: 파일에서 세그먼트를 로드하라.
-	 */
 	struct lazy_load_aux *lazy_aux = (struct lazy_load_aux *) aux;
 	void *kva = page->frame->kva;
 
-	// if (!vm_claim_page (page->va)) {
-	// 	return false;
-	// }
-
-	// page->buffer = palloc_get_page (PAL_USER);
-	// file_seek(lazy_aux->file,lazy_aux->ofs);
-	// file_read (lazy_aux->file, &page->buffer, lazy_aux->page_read_bytes);
-
-	if (file_read_at (
+  if (file_read_at (
 	            lazy_aux->file,
 	            kva,
 	            lazy_aux->page_read_bytes,
@@ -1203,12 +1192,6 @@ lazy_load_segment (struct page *page, void *aux) {
 	memset ((uint8_t *) kva + lazy_aux->page_read_bytes, 0, lazy_aux->page_zero_bytes);
 	free (lazy_aux);
 	return true;
-	/*
-	 * TODO: 이 함수는 VA 주소에서 첫 번째 페이지 폴트가 발생했을 때 호출된다.
-	 */
-	/*
-	 * TODO: 이 함수를 호출할 때 VA를 사용할 수 있다.
-	 */
 }
 
 /*
@@ -1242,10 +1225,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		/*
-		 * TODO: lazy_load_segment에 정보를 전달할 aux를 설정하라.
-		 */
-
 		struct lazy_load_aux *lazy_load_aux = malloc (sizeof (struct lazy_load_aux));
 
 		lazy_load_aux->file = file_reopen (file);
@@ -1258,12 +1237,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		                                     lazy_load_segment, lazy_load_aux))
 			return false;
 
-		/*
-		 * 다음 페이지로 진행한다.
-		 */
 		read_bytes -= page_read_bytes; // 6 - 4. 2.
 		zero_bytes -= page_zero_bytes; // 0
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	return true;
 }
