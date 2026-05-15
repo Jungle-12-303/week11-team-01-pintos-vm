@@ -6,6 +6,7 @@
 #include "lib/kernel/hash.h"
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
+#include "userprog/process.c"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -167,6 +168,31 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
+	// addr pg_round_down한다 == PG ALIGN 한다
+	uint64_t *va = pg_round_down (addr); // aligned
+	if (!is_user_vaddr (addr)) {
+		// TODO: -1로 비정상 종료
+		process_exit ();
+	}
+
+	struct page *page = spt_find_page (spt, va);
+	if (page == NULL) {
+		// spt에 없으니까 널이 됨.
+		/* Stack growth spt 등록 */
+		if ((uint64_t) addr > pg_round_down (f->rsp) && (uint64_t) addr <= pg_round_down (f->rsp) + PGSIZE) {
+			if (!vm_alloc_page (VM_UNINIT, va, true)) {
+				return false;
+			}
+			// TODO:  마커제로 기억하기
+
+			if (!vm_claim_page (va)) {
+				return false;
+			}
+			return true;
+		}
+		return false;
+	}
+
 	/* TODO: Your code goes here */
 
 	return vm_do_claim_page (page);
