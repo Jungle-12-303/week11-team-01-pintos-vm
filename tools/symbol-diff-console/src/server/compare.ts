@@ -79,17 +79,17 @@ export async function compareBranches(
 }
 
 async function resolveRequiredRef(repo: GitRepo, input: string): Promise<RefInfo> {
-  const resolvedCommit = await repo.resolveRef(input);
+  const resolvedCommit = await resolveRefWithRemoteFetch(repo, input);
   return { input, resolvedCommit };
 }
 
 async function resolveOptionalRef(repo: GitRepo, input: string, errors: StructuredError[]): Promise<RefInfo> {
   try {
-    return { input, resolvedCommit: await repo.resolveRef(input) };
+    return { input, resolvedCommit: await resolveRefWithRemoteFetch(repo, input) };
   } catch (error) {
     if (!input.includes("/")) {
       try {
-        return { input, resolvedCommit: await repo.resolveRef(`origin/${input}`) };
+        return { input, resolvedCommit: await resolveRefWithRemoteFetch(repo, `origin/${input}`) };
       } catch {
         // Fall through to report the original user-facing ref failure.
       }
@@ -97,6 +97,25 @@ async function resolveOptionalRef(repo: GitRepo, input: string, errors: Structur
     errors.push(toStructuredError(error, "ref", input));
     return { input, resolvedCommit: null };
   }
+}
+
+async function resolveRefWithRemoteFetch(repo: GitRepo, input: string): Promise<string> {
+  try {
+    return await repo.resolveRef(input);
+  } catch (error) {
+    const remoteRef = parseRemoteTrackingRef(input);
+    if (!remoteRef) {
+      throw error;
+    }
+    await repo.fetchRemoteBranch(remoteRef.remote, remoteRef.branch);
+    return repo.resolveRef(input);
+  }
+}
+
+function parseRemoteTrackingRef(input: string): { remote: string; branch: string } | null {
+  const match = /^([A-Za-z0-9._-]+)\/(.+)$/.exec(input);
+  if (!match || match[2] === "HEAD") return null;
+  return { remote: match[1], branch: match[2] };
 }
 
 async function compareFile(

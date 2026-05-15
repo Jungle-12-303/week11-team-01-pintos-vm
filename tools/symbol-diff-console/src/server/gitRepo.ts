@@ -50,6 +50,19 @@ export class GitRepo {
     return (await this.run(["rev-parse", "--verify", `${ref}^{commit}`], "ref", ref)).trim();
   }
 
+  async fetchRemoteBranch(remote: string, branch: string): Promise<void> {
+    if (!isSafeGitName(remote) || !isSafeBranchName(branch)) {
+      throw new GitCommandError({
+        scope: "ref",
+        code: "invalid_remote_branch",
+        message: `Ref is not safe to fetch: ${remote}/${branch}`,
+        ref: `${remote}/${branch}`,
+        recoverable: false
+      });
+    }
+    await this.run(["fetch", "--no-tags", remote, `+refs/heads/${branch}:refs/remotes/${remote}/${branch}`], "ref", `${remote}/${branch}`);
+  }
+
   async diffNameStatus(leftRef: string, rightRef: string): Promise<NameStatusEntry[]> {
     const output = await this.run(["diff", "--name-status", leftRef, rightRef, "--"], "repo");
     return output
@@ -142,4 +155,21 @@ export class GitRepo {
 
 export function isGitCommandError(error: unknown): error is GitCommandError {
   return error instanceof GitCommandError;
+}
+
+function isSafeGitName(value: string): boolean {
+  return /^[A-Za-z0-9._-]+$/.test(value) && !value.startsWith("-") && !value.includes("..") && !value.endsWith(".lock");
+}
+
+function isSafeBranchName(value: string): boolean {
+  return (
+    /^[A-Za-z0-9._/-]+$/.test(value) &&
+    !value.startsWith("-") &&
+    !value.startsWith("/") &&
+    !value.endsWith("/") &&
+    !value.includes("//") &&
+    !value.includes("..") &&
+    !value.includes("@{") &&
+    !value.endsWith(".lock")
+  );
 }
