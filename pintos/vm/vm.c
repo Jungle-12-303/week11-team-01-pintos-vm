@@ -6,6 +6,7 @@
 #include "lib/kernel/hash.h"
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
+#include <string.h>
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -265,8 +266,36 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 
 /* Copy supplemental page table from src to dst */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-                              struct supplemental_page_table *src UNUSED) {
+supplemental_page_table_copy (struct supplemental_page_table *dst,
+                              struct supplemental_page_table *src) {
+    struct hash_iterator i;	
+	hash_first(&i, &src->spt_entry);		
+
+	while(hash_next(&i)){
+		struct page *parent_page = hash_entry(i.elem, struct page, hash_elem);
+		enum vm_type parent_type = parent_page->operations->type;
+		struct page *child_page = malloc(sizeof(struct page));
+
+		if(child_page == NULL){
+			return false;
+		}
+		uninit_new(child_page, parent_page->va, parent_page->uninit.init, parent_type,
+			parent_page->uninit.aux, parent_page->uninit.type);
+		child_page->writable = parent_page->writable;
+
+		if(!spt_insert_page(dst, child_page)){
+			free(child_page);
+			return false;
+		}
+
+		if(VM_TYPE(parent_type) != VM_UNINIT){
+			if(!vm_do_claim_page(child_page->va)){
+				return false;
+			}
+			memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
+		}
+	}
+	return true;
 }
 
 /* Free the resource hold by the supplemental page table */
