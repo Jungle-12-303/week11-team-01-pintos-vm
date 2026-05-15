@@ -19,7 +19,8 @@ enum vm_type {
 	 * int 안에 들어가는 범위라면 더 추가해도 된다. */
 	VM_MARKER_0 = (1 << 3),
 	VM_MARKER_1 = (1 << 4),
-
+	VM_MARKER_2 = (1 << 5),
+	
 	/* 이 값을 넘기지 말 것. */
 	VM_MARKER_END = (1 << 31),
 };
