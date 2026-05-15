@@ -7,6 +7,7 @@
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
 #include "userprog/process.c"
+#include "string.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -270,6 +271,23 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
                               struct supplemental_page_table *src UNUSED) {
+	struct hash_iterator i;
+	hash_first (&i, &src->spt_entry);
+	while (hash_next (&i)) {
+		struct page *src_page = hash_entry (hash_cur (&i), struct page, hash_elem);
+		enum vm_type vmtype = page_get_type (src_page);
+
+		if (!vm_alloc_page (vmtype, src_page->va, true)) {
+			return false;
+		}
+
+		if (!vm_claim_page (src_page->va)) {
+			return false;
+		}
+		struct page *dst_page = spt_find_page (dst, src_page->va);
+		memcpy (dst_page->frame->kva, src_page->frame->kva, PGSIZE);
+	}
+	return true;
 }
 
 /* Free the resource hold by the supplemental page table */
