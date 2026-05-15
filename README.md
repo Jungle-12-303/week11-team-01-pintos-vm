@@ -40,6 +40,7 @@ npm --prefix tools/symbol-diff-console run dev
 ```
 
 개발 서버를 실행하면 브라우저 UI는 `http://127.0.0.1:5173`, API는 `http://127.0.0.1:5174`에서 열립니다.
+GitHub에서 불러온 원격 브랜치가 로컬에 아직 없으면 비교 시 필요한 ref를 먼저 fetch합니다.
 결정 로그는 기본적으로 대상 저장소 밖의 `~/.symbol-diff-console/sessions/`에 저장됩니다.
 
 ## 디렉터리 구조
@@ -48,6 +49,7 @@ npm --prefix tools/symbol-diff-console run dev
 SW_AI-W09-pintos/
 ├── README.md
 ├── CHANGELOG.md
+├── VERSION
 ├── pintos-project2-process-tests.md
 ├── docs/
 │   ├── convention/
