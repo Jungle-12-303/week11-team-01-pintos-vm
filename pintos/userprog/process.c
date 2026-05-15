@@ -49,6 +49,7 @@ struct load_info {
 	off_t ofs;
 	uint32_t read_bytes;
 	uint32_t zero_bytes;
+	bool is_writable;
 };
 
 /* fd_table 최대 슬롯 수 (4KB 페이지 / 포인터 크기). */
@@ -1221,6 +1222,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	off_t ofs = info->ofs;
 	uint32_t read_bytes = info->read_bytes;
 	uint32_t zero_bytes = info->zero_bytes;
+	bool is_writable = info->is_writable;
 	void *Kva = page->frame->kva;
 
 	bool succ = false;
@@ -1230,7 +1232,7 @@ lazy_load_segment (struct page *page, void *aux) {
 
 	/* frame을 read_bytes만큼 읽어서 내용을 채운다 */
 	if(file_read_at(file, Kva, read_bytes, ofs) == read_bytes){
-		// install_page(page->va, Kva, true);
+		install_page(page->va, Kva, is_writable);
 		succ = true;
 	}
 
@@ -1276,6 +1278,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		aux->ofs = ofs;
 		aux->read_bytes = page_read_bytes;
 		aux->zero_bytes = page_zero_bytes;
+		aux->is_writable = writable;
 
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
 		                                     lazy_load_segment, aux))
@@ -1301,6 +1304,7 @@ setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	/* 페이지 시작 주소 */
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
+	struct page *page = NULL;
 
 	/* 다음 과정을 수행한다:
 	   1. 페이지 골격을 만들고 spt 장부에 기입
@@ -1308,8 +1312,13 @@ setup_stack (struct intr_frame *if_) {
 	vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, true);
 	success = vm_claim_page(stack_bottom);
 
+	/* 성공 시:
+	   1. rsp에 현 축적 시작점 표시
+	   2. is_stack 값 유효함으로 표시 */
 	if(success){
 		if_->rsp = USER_STACK;
+		page = spt_find_page(&thread_current()->spt, stack_bottom);
+		page->is_stack = true;
 	}
 		
 	return success;

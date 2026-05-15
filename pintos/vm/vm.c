@@ -85,7 +85,10 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 				break;
 		}
 
-		/* 3. 해당 페이지를 spt 장부에 등록 => 결과 반환 */
+		/* 3. is_writable 표식하기 */
+		page->is_writable = writable;
+
+		/* 4. 해당 페이지를 spt 장부에 등록 => 결과 반환 */
 		return spt_insert_page(spt, page);
 	}
 err:
@@ -244,7 +247,7 @@ vm_do_claim_page (struct page *page) {
 	page->frame = frame;
 
 	/* 요것이 MMU 매핑 함수라고 한다. 자세한 내용은 모름! => 실패시 free */
-	if(!pml4_set_page(thread_current()->pml4, page->va, frame->kva, true)){
+	if(!pml4_set_page(thread_current()->pml4, page->va, frame->kva, page->is_writable)){
 		palloc_free_page(frame->kva);
 		free(frame);
 		return false;

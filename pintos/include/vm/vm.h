@@ -50,7 +50,9 @@ struct page {
 	struct frame *frame;   /* frame에서 page로 되돌아오는 참조 */
 	struct hash_elem hash_elem; /* hash table에 종속되도록 */
 
-	/* 구현부 */
+	/* 추가 구현부 */
+	bool is_stack;
+	bool is_writable;
 
 	/* 타입별 데이터는 union에 묶여 있다.
 	 * 각 함수는 현재 어떤 union 멤버를 써야 하는지 자동으로 판단한다. */
