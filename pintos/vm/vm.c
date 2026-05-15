@@ -57,8 +57,8 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable, v
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, upage) == NULL) {
 		struct page *page = malloc (sizeof (struct page));
-    
-		switch (VM_TYPE(type)) {
+
+		switch (VM_TYPE (type)) {
 		case VM_ANON:
 			uninit_new (page, upage, init, type, aux, &anon_initializer);
 			break;

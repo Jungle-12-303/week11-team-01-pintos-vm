@@ -156,7 +156,7 @@ page_fault (struct intr_frame *f) {
 	 * fault를 일으킨 주소, 즉 접근 시도로 인해 fault가 발생한 가상 주소를 얻는다.
 	 * 이 주소는 코드나 데이터를 가리킬 수 있다.
 	 * 또한 이것이 fault를 일으킨 명령어의 주소(f->rip)와 같은 것은 아니다.
-	 */
+	*/
 
 	fault_addr = (void *) rcr2();
 
