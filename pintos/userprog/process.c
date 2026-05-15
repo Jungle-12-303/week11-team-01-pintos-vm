@@ -1260,10 +1260,25 @@ setup_stack (struct intr_frame *if_) {
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
 
 	/*
-	 * TODO: stack_bottom에 스택을 매핑하고 페이지를 즉시 claim하라.
+	 * TODO: stack_bottom에 스택을 매핑하고
+	 
+	 페이지를 즉시 claim하라.
+
+
 	 * TODO: 성공하면 그에 맞게 rsp를 설정하라.
+
+
 	 * TODO: 해당 페이지를 스택 페이지로 표시해야 한다.
 	 */
+	success = vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom,true);
+
+	if (success){
+		success =vm_claim_page(stack_bottom);
+	}
+	if(success){
+		if_->rsp = USER_STACK;
+	}
+
 	/*
 	 * TODO: 여기에 코드를 작성하라.
 	 */
