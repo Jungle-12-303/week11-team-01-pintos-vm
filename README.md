@@ -20,10 +20,27 @@ KAIST Pintos 기반으로 Project 1~4를 진행하는 팀 저장소입니다.
 ## 빠른 이동
 
 - 변경 이력: [CHANGELOG.md](CHANGELOG.md)
+- 브랜치 심볼 비교 콘솔: [tools/symbol-diff-console](tools/symbol-diff-console/README.md)
+- 심볼 비교 설계 기록: [docs/designs/pair-programming-symbol-diff-design.md](docs/designs/pair-programming-symbol-diff-design.md)
 - 프로세스 테스트 정리: [pintos-project2-process-tests.md](pintos-project2-process-tests.md)
 - 구현 가이드: [docs/pintos/08-implementation-guide.md](docs/pintos/08-implementation-guide.md)
 - 팀 전략: [docs/pintos/09-team-strategy.md](docs/pintos/09-team-strategy.md)
 - 코드/문서 컨벤션: [docs/convention/README.md](docs/convention/README.md)
+
+## 로컬 도구
+
+### 브랜치 심볼 비교 콘솔
+
+`tools/symbol-diff-console/`은 두 Git ref의 C 심볼 변경을 비교하는 로컬 Node/TypeScript 도구입니다.
+GitHub 브랜치 목록을 드롭다운으로 불러오고, Tree-sitter로 함수/구조체/매크로 단위 변경을 묶어 한국어 3패널 UI에서 검토할 수 있습니다.
+
+```bash
+npm --prefix tools/symbol-diff-console install
+npm --prefix tools/symbol-diff-console run dev
+```
+
+개발 서버를 실행하면 브라우저 UI는 `http://127.0.0.1:5173`, API는 `http://127.0.0.1:5174`에서 열립니다.
+결정 로그는 기본적으로 대상 저장소 밖의 `~/.symbol-diff-console/sessions/`에 저장됩니다.
 
 ## 디렉터리 구조
 
@@ -34,6 +51,7 @@ SW_AI-W09-pintos/
 ├── pintos-project2-process-tests.md
 ├── docs/
 │   ├── convention/
+│   ├── designs/
 │   ├── merge-recovery/
 │   └── pintos/
 ├── pintos/
@@ -41,7 +59,9 @@ SW_AI-W09-pintos/
 │   ├── userprog/
 │   ├── vm/
 │   └── README.md
-└── scripts/
+├── scripts/
+└── tools/
+    └── symbol-diff-console/
 ```
 
 ## 개발 환경
@@ -57,6 +77,14 @@ SW_AI-W09-pintos/
 ```bash
 make -C pintos/threads
 make -C pintos/userprog
+```
+
+브랜치 심볼 비교 콘솔은 별도 Node 패키지로 격리되어 있습니다. 루트 `package.json`은 만들지 않고 아래처럼 `--prefix`로 실행합니다.
+
+```bash
+npm --prefix tools/symbol-diff-console test
+npm --prefix tools/symbol-diff-console run build
+npm --prefix tools/symbol-diff-console run test:e2e
 ```
 
 ## 작업 원칙

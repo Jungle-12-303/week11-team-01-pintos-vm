@@ -8,6 +8,19 @@
 - 카테고리: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Docs`, `Refactored`
 - 단순 커밋 나열보다 "실제로 무엇이 바뀌었는가" 기준으로 정리합니다.
 
+[0.5.0] - 2026-05-15
+Added
+- 두 브랜치의 C 심볼 변경을 한국어 3패널 UI에서 검토하는 로컬 `tools/symbol-diff-console/` 도구 추가
+- GitHub `origin` 브랜치 목록을 드롭다운으로 불러오고, 선택한 left/right/target ref 기준으로 비교 리포트 생성
+- Tree-sitter 기반 함수/구조체/typedef/매크로 추출, 위험 플래그, 건너뜀/잘림 파일 표시, PR 본문 내보내기 흐름 추가
+- 결정 기록을 대상 저장소 밖 `~/.symbol-diff-console/sessions/`에 저장하는 세션 저장소 추가
+
+Docs
+- 브랜치 심볼 비교 콘솔의 제품 방향과 승인된 3-pane 디자인 기준 문서 추가
+
+Tests
+- Git 어댑터, GitHub 브랜치 대체 경로, C 심볼 추출, 세션 저장, 비교 리포트, Playwright 스모크 테스트 추가
+
 [0.4.0] - 2026-05-05
 Docs
 - 루트 `README.md`를 현재 Pintos 저장소 기준 안내 문서로 전면 재작성
