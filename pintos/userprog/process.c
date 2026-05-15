@@ -1252,7 +1252,6 @@ static bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-
 	/*
 	 * TODO: stack_bottom에 스택을 매핑하고 페이지를 즉시 claim하라.
 	 * TODO: 성공하면 그에 맞게 rsp를 설정하라.
@@ -1261,6 +1260,17 @@ setup_stack (struct intr_frame *if_) {
 	/*
 	 * TODO: 여기에 코드를 작성하라.
 	 */
+
+	if (vm_alloc_page(VM_ANON, stack_bottom, true) && 
+		vm_claim_page(stack_bottom)){
+		struct page *page = NULL;
+		struct supplemental_page_table *spt = &thread_current()->spt;	
+		
+		if_->rsp = USER_STACK ;	
+		page = spt_find_page(spt, stack_bottom);
+		page->is_stack_page = true;
+		success = true;
+	}
 
 	return success;
 }
