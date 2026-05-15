@@ -59,6 +59,7 @@ export function App() {
 
   const highRiskCount = useMemo(() => report?.symbols.filter((symbol) => symbol.riskFlags.length > 0).length ?? 0, [report]);
   const undecidedCount = useMemo(() => report?.symbols.filter((symbol) => !symbol.decision).length ?? 0, [report]);
+  const decidedCount = report ? report.symbols.length - undecidedCount : 0;
   const canCompare = Boolean(form.repoPath && form.leftRef && form.rightRef);
 
   async function loadRepository(repoPath = form.repoPath) {
@@ -162,27 +163,26 @@ export function App() {
           <span>위험 심볼 먼저 보기</span>
         </div>
         <div className="compare-strip" aria-label="branch comparison">
-          <span className="muted">target</span>
-          <span className="target-pill">{branchLabel(repoInfo, form.targetRef, "target 선택 없음")}</span>
+          <span className="muted">대상</span>
+          <span className="target-pill">{branchLabel(repoInfo, form.targetRef, "대상 선택 없음")}</span>
           <strong>{report?.refs.left.input ?? branchLabel(repoInfo, form.leftRef, "왼쪽 브랜치 선택")}</strong>
           <span className="arrow">→</span>
           <strong>{report?.refs.right.input ?? branchLabel(repoInfo, form.rightRef, "오른쪽 브랜치 선택")}</strong>
           <span className="resolved">
-            resolved {shortSha(report?.refs.left.resolvedCommit)} / {shortSha(report?.refs.right.resolvedCommit)}
+            {report
+              ? `커밋 ${shortSha(report.refs.left.resolvedCommit)} / ${shortSha(report.refs.right.resolvedCommit)}`
+              : "커밋 대기"}
           </span>
         </div>
         <button className="ghost-button" disabled={!prBody || prBody.locked} onClick={copyPrBody}>
           PR 본문 복사
-        </button>
-        <button className="primary-button" disabled>
-          Draft PR
         </button>
       </header>
 
       <section className="compare-form" aria-label="compare refs">
         <div className="repo-field">
           <label>
-            repo
+            저장소
             <div className="repo-input-row">
               <input
                 aria-label="repo"
@@ -211,25 +211,28 @@ export function App() {
               ? repoError
               : repoInfo
                 ? `${repoInfo.source === "github_api" ? "GitHub" : "로컬 ref"} · ${repoInfo.fullName ?? "origin 없음"} · ${repoInfo.branches.length}개`
-                : "GitHub origin을 읽어 브랜치 목록을 가져옵니다."}
+                : "브랜치 목록 대기"}
           </div>
         </div>
         <BranchSelect
-          label="left"
+          label="왼쪽"
+          testId="left"
           value={form.leftRef}
           branches={repoInfo?.branches ?? []}
           placeholder="선택 안 함"
           onChange={(leftRef) => setForm({ ...form, leftRef })}
         />
         <BranchSelect
-          label="right"
+          label="오른쪽"
+          testId="right"
           value={form.rightRef}
           branches={repoInfo?.branches ?? []}
           placeholder="선택 안 함"
           onChange={(rightRef) => setForm({ ...form, rightRef })}
         />
         <BranchSelect
-          label="target"
+          label="대상"
+          testId="target"
           value={form.targetRef}
           branches={repoInfo?.branches ?? []}
           placeholder="선택 안 함"
@@ -265,10 +268,14 @@ export function App() {
           <div className="progress-card">
             <h3>검토 진행</h3>
             <p>
-              결정 {(report?.symbols.length ?? 0) - undecidedCount} / {report?.symbols.length ?? 0}
+              결정 {decidedCount} / {report?.symbols.length ?? 0}
             </p>
-            <strong className={undecidedCount ? "locked-text" : "ready-text"}>
-              {undecidedCount ? `남은 심볼 ${undecidedCount}개 · PR 작성 전 확인` : "모든 결정 완료 · PR 본문 복사 가능"}
+            <strong className={report && !undecidedCount ? "ready-text" : "locked-text"}>
+              {!report
+                ? "비교 후 결정 가능"
+                : undecidedCount
+                  ? `남은 심볼 ${undecidedCount}개 · PR 작성 전 확인`
+                  : "모든 결정 완료 · PR 본문 복사 가능"}
             </strong>
           </div>
         </aside>
@@ -286,7 +293,7 @@ export function App() {
                 ))}
               </div>
             </div>
-            <span className="split-pill">Split view</span>
+            <span className="split-pill">분할 보기</span>
           </div>
           <div className="branch-row">
             <span>왼쪽 브랜치</span>
@@ -297,11 +304,7 @@ export function App() {
           </div>
           <RiskBanner symbol={selectedSymbol} />
           <MergeDiff symbol={selectedSymbol} />
-          <div className="fallback-banner">
-            <strong>fallback visible</strong>
-            <span>parse_error나 skipped file이 있으면 파일 diff와 사유를 이 영역에 유지합니다.</span>
-          </div>
-          <div className="shortcut-banner">단축키: j/k 심볼 이동 · 1/2/3/4 결정 · Cmd+Enter PR 본문 생성</div>
+          <CompareNotices report={report} />
         </section>
 
         <aside className="decision-panel" aria-label="decision panel">
@@ -352,7 +355,11 @@ export function App() {
           <h3>PR 본문 미리보기</h3>
           <pre className="pr-preview">{prBody?.markdown ?? "비교를 실행하면 PR 본문이 생성됩니다."}</pre>
           <button className="locked-button" disabled={prBody?.locked ?? true}>
-            {prBody?.locked ? `남은 결정 ${prBody.remaining}개 · PR 잠김` : "모든 결정 완료 · PR 본문 복사 가능"}
+            {!prBody
+              ? "비교 후 PR 본문 확인"
+              : prBody.locked
+                ? `남은 결정 ${prBody.remaining}개 · PR 잠김`
+                : "모든 결정 완료 · PR 본문 복사 가능"}
           </button>
         </aside>
       </main>
@@ -362,12 +369,14 @@ export function App() {
 
 function BranchSelect({
   label,
+  testId,
   value,
   branches,
   placeholder,
   onChange
 }: {
   label: string;
+  testId: string;
   value: string;
   branches: BranchOption[];
   placeholder: string;
@@ -381,7 +390,7 @@ function BranchSelect({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={!branches.length}
-        data-testid={`${label}-branch-select`}
+        data-testid={`${testId}-branch-select`}
       >
         <option value="">{placeholder}</option>
         {branches.map((branch) => (
@@ -392,6 +401,48 @@ function BranchSelect({
         ))}
       </select>
     </label>
+  );
+}
+
+function CompareNotices({ report }: { report: CompareReport | null }) {
+  if (!report) return null;
+  const notices: Array<{ title: string; text: string }> = [];
+  const truncated = Object.entries(report.truncated)
+    .filter(([, value]) => value)
+    .map(([key]) => key)
+    .join(", ");
+
+  if (report.skippedFiles.length) {
+    notices.push({
+      title: "스킵 파일",
+      text: `${report.skippedFiles.length}개 · ${report.skippedFiles
+        .slice(0, 2)
+        .map((file) => `${file.path} (${file.reason})`)
+        .join(", ")}`
+    });
+  }
+  if (report.errors.length) {
+    notices.push({
+      title: "비교 경고",
+      text: `${report.errors.length}개 · ${report.errors[0].message}`
+    });
+  }
+  if (truncated) {
+    notices.push({
+      title: "렌더 제한",
+      text: `${truncated} 항목이 제한되어 PR 본문에도 표시됩니다.`
+    });
+  }
+  if (!notices.length) return null;
+  return (
+    <div className="notice-stack">
+      {notices.map((notice) => (
+        <div className="notice-banner" key={notice.title}>
+          <strong>{notice.title}</strong>
+          <span>{notice.text}</span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -442,7 +493,7 @@ function RiskBanner({ symbol }: { symbol: SymbolDiff | undefined }) {
   if (!symbol) return null;
   const hasOffsetRisk = symbol.riskFlags.includes("offset_update_changed");
   if (!hasOffsetRisk) {
-    return <div className="risk-banner muted-banner">선택한 심볼의 변경 내용을 확인하고 결정을 남기세요.</div>;
+    return <div className="risk-banner muted-banner">위험 플래그 없음</div>;
   }
   return (
     <div className="risk-banner">
@@ -462,7 +513,7 @@ async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit): Promi
 }
 
 function shortSha(value: string | null | undefined): string {
-  return value ? value.slice(0, 7) : "unresolved";
+  return value ? value.slice(0, 7) : "미해결";
 }
 
 function branchLabel(repoInfo: GitHubRepositoryResponse | null, ref: string, fallback: string): string {

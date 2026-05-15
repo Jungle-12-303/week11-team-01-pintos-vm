@@ -1,8 +1,20 @@
 :root {
-  color: #172033;
-  background: #eef3f7;
+  --accent: #2369aa;
+  --accent-strong: #1f5f9c;
+  --bg: #eef3f7;
+  --border: #d7e0e8;
+  --border-soft: #dfe7ef;
+  --danger: #9f1d2f;
+  --danger-bg: #fde8e9;
+  --muted: #617086;
+  --surface: #fbfdff;
+  --surface-soft: #f6f9fc;
+  --text: #172033;
+
+  color: var(--text);
+  background: var(--bg);
   font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", "Segoe UI Variable", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -13,8 +25,9 @@
 
 body {
   margin: 0;
-  min-width: 1120px;
-  background: #eef3f7;
+  min-width: 0;
+  overflow-x: hidden;
+  background: var(--bg);
 }
 
 button,
@@ -35,14 +48,14 @@ button {
 
 .topbar {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
   min-height: 68px;
   padding: 12px 14px;
-  border: 1px solid #d7e0e8;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--surface);
 }
 
 .brand h1,
@@ -64,11 +77,10 @@ p {
 .resolved,
 .symbol-copy small,
 .sidebar-header span,
-.shortcut-banner,
-.fallback-banner span,
+.notice-banner span,
 .risk-banner,
 .compare-form label {
-  color: #617086;
+  color: var(--muted);
 }
 
 .compare-strip {
@@ -88,7 +100,12 @@ p {
 .selected-meta code,
 .mono-title,
 .file-heading,
-.symbol-copy strong {
+.symbol-copy strong,
+.symbol-copy small,
+.target-pill,
+.split-pill,
+.chip,
+.decision-pill {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -102,6 +119,7 @@ p {
   align-items: center;
   justify-content: center;
   min-width: 0;
+  max-width: 100%;
   height: 24px;
   padding: 0 8px;
   border-radius: 7px;
@@ -147,7 +165,7 @@ p {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 36px;
+  min-height: 40px;
   padding: 0 12px;
   border-radius: 8px;
   font-weight: 700;
@@ -157,7 +175,7 @@ p {
 
 .primary-button {
   color: #ffffff;
-  background: #2369aa;
+  background: var(--accent);
 }
 
 .ghost-button {
@@ -188,9 +206,9 @@ button:disabled,
   align-items: end;
   margin-top: 10px;
   padding: 10px;
-  border: 1px solid #d7e0e8;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--surface);
 }
 
 .compare-form label,
@@ -215,12 +233,12 @@ textarea {
 }
 
 input {
-  height: 36px;
+  height: 40px;
   padding: 0 10px;
 }
 
 select {
-  height: 36px;
+  height: 40px;
   padding: 0 30px 0 10px;
 }
 
@@ -276,9 +294,9 @@ textarea {
 .diff-workspace,
 .decision-panel {
   min-height: calc(100vh - 168px);
-  border: 1px solid #d7e0e8;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--surface);
 }
 
 .symbol-sidebar,
@@ -291,7 +309,7 @@ textarea {
 
 .diff-workspace {
   display: grid;
-  grid-template-rows: auto auto auto minmax(430px, 1fr) auto auto;
+  grid-template-rows: auto auto auto minmax(430px, 1fr) auto;
   gap: 10px;
   padding: 12px;
   min-width: 0;
@@ -302,7 +320,7 @@ textarea {
 .branch-row,
 .selected-meta,
 .chip-row,
-.fallback-banner,
+.notice-banner,
 .risk-banner {
   display: flex;
   align-items: center;
@@ -326,7 +344,7 @@ textarea {
   margin-top: 6px;
   font-size: 30px;
   font-weight: 800;
-  color: #1f5f9c;
+  color: var(--accent-strong);
 }
 
 .symbol-list {
@@ -388,13 +406,12 @@ textarea {
 
 .progress-card,
 .empty-panel,
-.fallback-banner,
-.shortcut-banner,
+.notice-banner,
 .risk-banner,
 .pr-preview {
-  border: 1px solid #dfe7ef;
+  border: 1px solid var(--border-soft);
   border-radius: 8px;
-  background: #f6f9fc;
+  background: var(--surface-soft);
 }
 
 .progress-card {
@@ -497,15 +514,20 @@ code,
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-.fallback-banner,
-.shortcut-banner {
-  min-height: 34px;
-  padding: 8px 10px;
+.notice-stack {
+  display: grid;
+  gap: 8px;
 }
 
-.shortcut-banner {
-  color: #617086;
+.notice-banner {
+  min-height: 36px;
+  padding: 8px 10px;
+  color: var(--muted);
   font-size: 12px;
+}
+
+.notice-banner strong {
+  color: var(--text);
 }
 
 .decision-grid {
@@ -536,10 +558,6 @@ code,
 }
 
 @media (max-width: 1220px) {
-  body {
-    min-width: 960px;
-  }
-
   .workspace {
     grid-template-columns: 260px minmax(0, 1fr) 300px;
   }
@@ -551,4 +569,120 @@ code,
   .resolved {
     display: none;
   }
+}
+
+@media (max-width: 1060px) {
+  .topbar {
+    grid-template-columns: 1fr auto;
+  }
+
+  .compare-strip {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .compare-form {
+    grid-template-columns: minmax(0, 1fr) minmax(140px, 0.5fr) minmax(140px, 0.5fr) minmax(140px, 0.5fr);
+  }
+
+  .repo-field {
+    grid-column: 1 / -1;
+  }
+
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .symbol-sidebar,
+  .diff-workspace,
+  .decision-panel {
+    min-height: auto;
+  }
+
+  .symbol-list {
+    max-height: 360px;
+  }
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    padding: 8px;
+  }
+
+  .topbar,
+  .compare-form,
+  .symbol-sidebar,
+  .diff-workspace,
+  .decision-panel {
+    padding: 10px;
+  }
+
+  .topbar,
+  .compare-form,
+  .repo-input-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .compare-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+
+  .compare-form > .primary-button {
+    width: 100%;
+  }
+
+  .primary-button,
+  .ghost-button,
+  .locked-button,
+  input,
+  select {
+    min-height: 44px;
+  }
+
+  .branch-row,
+  .risk-banner,
+  .notice-banner,
+  .selected-meta {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .branch-row code,
+  .selected-meta code {
+    max-width: 100%;
+  }
+
+  .mono-title {
+    max-width: 100%;
+    font-size: 17px;
+  }
+
+  .merge-view {
+    min-height: 360px;
+    overflow-x: auto;
+  }
+
+  .merge-view .cm-editor {
+    height: 360px;
+  }
+
+  .merge-view .cm-mergeView {
+    min-width: 640px;
+  }
+
+  .pr-preview {
+    min-height: 210px;
+    max-height: 260px;
+  }
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgb(35 105 170 / 24%);
+  outline-offset: 2px;
+  border-color: var(--accent);
 }
