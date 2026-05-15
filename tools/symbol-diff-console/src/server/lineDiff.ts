@@ -1,5 +1,7 @@
 import type { Hunk, HunkLine } from "../shared/schema";
 
+const MAX_LCS_CELLS = 120_000;
+
 export function buildLineHunks(
   leftText: string,
   rightText: string,
@@ -9,6 +11,9 @@ export function buildLineHunks(
 ): { hunks: Hunk[]; truncated: boolean } {
   const left = splitLines(leftText);
   const right = splitLines(rightText);
+  if (left.length * right.length > MAX_LCS_CELLS) {
+    return buildFallbackHunk(left, right, leftStartLine, rightStartLine, maxHunkLines);
+  }
   const matrix = buildLcsMatrix(left, right);
   const lines: HunkLine[] = [];
   let i = 0;
@@ -50,6 +55,31 @@ export function buildLineHunks(
         ]
       : [],
     truncated
+  };
+}
+
+function buildFallbackHunk(
+  left: string[],
+  right: string[],
+  leftStartLine: number,
+  rightStartLine: number,
+  maxHunkLines: number
+): { hunks: Hunk[]; truncated: boolean } {
+  const lines: HunkLine[] = [
+    ...left.map((text, index) => ({ type: "delete" as const, leftLine: leftStartLine + index, text })),
+    ...right.map((text, index) => ({ type: "add" as const, rightLine: rightStartLine + index, text }))
+  ];
+  return {
+    hunks: [
+      {
+        oldStart: leftStartLine,
+        oldLines: left.length,
+        newStart: rightStartLine,
+        newLines: right.length,
+        lines: lines.slice(0, maxHunkLines)
+      }
+    ],
+    truncated: true
   };
 }
 
