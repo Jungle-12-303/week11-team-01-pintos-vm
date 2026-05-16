@@ -155,15 +155,11 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static bool
 vm_stack_growth (void *addr) {
-	void *upage = pg_round_down (addr);
-	return vm_alloc_page (VM_ANON | VM_MARKER_0, upage, true) &&
-	       vm_claim_page (upage);
 }
 
 /* Handle the fault on write_protected page */
 static bool
 vm_handle_wp (struct page *page UNUSED) {
-	return false;
 }
 
 /* Return true on success */
@@ -241,15 +237,7 @@ vm_do_claim_page (struct page *page) {
 		return false;
 	};
 
-	if (!swap_in (page, frame->kva)) {
-		pml4_clear_page (thread_current ()->pml4, page->va);
-		palloc_free_page (frame->kva);
-		free (frame);
-		page->frame = NULL;
-		return false;
-	}
-
-	return true;
+	return swap_in (page, frame->kva);
 }
 
 /* Returns a hash value for page p. */
