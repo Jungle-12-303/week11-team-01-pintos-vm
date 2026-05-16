@@ -92,8 +92,6 @@ struct page_operations {
  * 이 구조체 설계는 특정 방식으로 강제하지 않는다.
  * 설계는 전적으로 구현자 선택이다. */
 struct supplemental_page_table {
-	// 페이지리스트
-	// hashtable할것이다
 	struct hash spt_entry;
 };
 
