@@ -22,5 +22,4 @@ struct lazy_load_aux {
 	size_t page_read_bytes;
 	size_t page_zero_bytes;
 };
-
 #endif /* userprog/process.h */

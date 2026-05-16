@@ -143,7 +143,7 @@ struct thread {
 	/*
 	 * 스레드가 소유한 전체 가상 메모리를 위한 테이블.
 	 */
-	// uint64_t *pml4; // 중복 정의
+
 	struct supplemental_page_table spt;
 #endif
 	struct intr_frame tf; // 문맥 전환에 필요한 레지스터 문맥

@@ -48,5 +48,12 @@ anon_swap_out (struct page *page) {
 /* Destroy the anonymous page. PAGE will be freed by the caller. */
 static void
 anon_destroy (struct page *page) {
-	struct anon_page *anon_page = &page->anon;
+	// struct anon_page *anon_page = &page->anon;
+
+	if(page->frame){
+		if(page->frame->kva != NULL){
+			palloc_free_page(page->frame->kva);
+		}
+		free(page->frame);
+	}
 }
