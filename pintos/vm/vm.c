@@ -277,13 +277,13 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 
 /* Copy supplemental page table from src to dst */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-                              struct supplemental_page_table *src UNUSED) {
+supplemental_page_table_copy (struct supplemental_page_table *dst,
+                              struct supplemental_page_table *src) {
 	struct hash_iterator i;
+  
 	hash_first (&i, &src->spt_entry);
 	while (hash_next (&i)) {
 		struct page *src_page = hash_entry (hash_cur (&i), struct page, hash_elem);
-		enum vm_type vmtype = page_get_type (src_page);
 
 		if (src_page->operations->type == VM_UNINIT) {
 			void *aux = lazy_load_aux_copy (src_page->uninit.aux);
@@ -309,9 +309,13 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 			return false;
 		}
 
-		if (!vm_claim_page (src_page->va)) {
+		if (!vm_alloc_page (page_get_type (src_page), src_page->va,
+		                    src_page->writable))
 			return false;
-		}
+
+		if (!vm_claim_page (src_page->va))
+			return false;
+
 		struct page *dst_page = spt_find_page (dst, src_page->va);
 		if (dst_page == NULL || dst_page->frame == NULL ||
 		    src_page->frame == NULL) {
