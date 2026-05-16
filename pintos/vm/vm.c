@@ -6,7 +6,7 @@
 #include "lib/kernel/hash.h"
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
-#include "userprog/process.c"
+#include "userprog/process.h"
 #include "string.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
@@ -176,7 +176,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		process_exit ();
 	}
 
-	struct page *page = spt_find_page (spt, va);
+	page = spt_find_page (spt, va);
 	if (page == NULL) {
 		// spt에 없으니까 널이 됨.
 		/* Stack growth spt 등록 */
