@@ -70,7 +70,7 @@ uninit_destroy (struct page *page) {
 	if (uninit->aux != NULL) {
 		struct lazy_load_aux *lazy_aux = uninit->aux;
     
-    if(uninit_aux->file != NULL) {
+    if(lazy_aux->file != NULL) {
 		  file_close (lazy_aux->file);
     }
 		free (lazy_aux);

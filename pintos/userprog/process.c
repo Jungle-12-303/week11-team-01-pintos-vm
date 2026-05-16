@@ -411,6 +411,9 @@ process_exec (void *f_name) {
 	 * 먼저 현재 문맥을 제거한다.
 	 */
 	process_cleanup ();
+#ifdef VM
+	supplemental_page_table_init (&curr->spt);
+#endif
 
 	/* 첫 exec일 때만 fd_table을 준비하고, 기존 열린 fd는 유지한다. */
 	if (curr->fd_table == NULL) {
@@ -568,6 +571,11 @@ process_close_file (int fd) {
 static void
 process_cleanup (void) {
 	struct thread *curr = thread_current ();
+
+	if (curr->running_file != NULL) {
+		file_close (curr->running_file);
+		curr->running_file = NULL;
+	}
 
 #ifdef VM
 	supplemental_page_table_kill (&curr->spt);
@@ -799,6 +807,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
+	file_deny_write (file);
 
 	/*
 	 * 실행 파일 헤더를 읽고 검증한다.
@@ -1035,8 +1044,12 @@ done:
 	if (fn_copy != NULL)
 		palloc_free_page (fn_copy);
 
-	if (file != NULL)
-		file_close (file);
+	if (file != NULL) {
+		if (success)
+			t->running_file = file;
+		else
+			file_close (file);
+	}
 	return success;
 }
 
