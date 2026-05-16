@@ -6,6 +6,7 @@
 #include "lib/kernel/hash.h"
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
+#include <string.h>
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -162,13 +163,36 @@ vm_handle_wp (struct page *page UNUSED) {
 
 /* Return true on success */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
-                     bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
+vm_try_handle_fault (struct intr_frame *f, void *addr,
+                     bool user, bool write, bool not_present) {
+	struct supplemental_page_table *spt = &thread_current ()->spt;
 	struct page *page = NULL;
-	/* TODO: Validate the fault */
-	/* TODO: Your code goes here */
 
+	if (addr == NULL || !is_user_vaddr(addr)){
+		return false;
+	}
+
+	if (!not_present){
+		return false;
+	}
+
+	if(!(page = spt_find_page(spt, addr))){
+		if(addr < USER_STACK && addr >= f->rsp - 8){
+			vm_stack_growth(addr);		
+			
+			if(!(page = spt_find_page(spt, addr))){
+				return false;
+			}
+		}
+		else{
+			return false;
+		}
+	}
+
+	if(!page->writable && write){
+		return false;
+	}
+	
 	return vm_do_claim_page (page);
 }
 
@@ -242,8 +266,36 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 
 /* Copy supplemental page table from src to dst */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-                              struct supplemental_page_table *src UNUSED) {
+supplemental_page_table_copy (struct supplemental_page_table *dst,
+                              struct supplemental_page_table *src) {
+    struct hash_iterator i;	
+	hash_first(&i, &src->spt_entry);		
+
+	while(hash_next(&i)){
+		struct page *parent_page = hash_entry(i.elem, struct page, hash_elem);
+		enum vm_type parent_type = parent_page->operations->type;
+		struct page *child_page = malloc(sizeof(struct page));
+
+		if(child_page == NULL){
+			return false;
+		}
+		uninit_new(child_page, parent_page->va, parent_page->uninit.init, parent_type,
+			parent_page->uninit.aux, parent_page->uninit.type);
+		child_page->writable = parent_page->writable;
+
+		if(!spt_insert_page(dst, child_page)){
+			free(child_page);
+			return false;
+		}
+
+		if(VM_TYPE(parent_type) != VM_UNINIT){
+			if(!vm_do_claim_page(child_page->va)){
+				return false;
+			}
+			memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
+		}
+	}
+	return true;
 }
 
 /* Free the resource hold by the supplemental page table */
