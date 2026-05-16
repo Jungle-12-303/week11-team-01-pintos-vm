@@ -1167,13 +1167,6 @@ install_page (void *upage, void *kpage, bool writable) {
  * project 2만을 위한 함수를 구현하려면 위쪽 블록에 구현하라.
  */
 
-struct lazy_load_aux {
-	struct file *file;
-	off_t ofs;
-	size_t page_read_bytes;
-	size_t page_zero_bytes;
-};
-
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	struct lazy_load_aux *lazy_aux = (struct lazy_load_aux *) aux;
@@ -1243,8 +1236,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			return false;
 		}
 
-		read_bytes -= page_read_bytes; // 6 - 4. 2.
-		zero_bytes -= page_zero_bytes; // 0
+		read_bytes -= page_read_bytes;
+		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
 		ofs += page_read_bytes;
 	}
@@ -1259,30 +1252,13 @@ setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
 
-	/*
-	 * TODO: stack_bottom에 스택을 매핑하고
-	 
-	 페이지를 즉시 claim하라.
-
-
-	 * TODO: 성공하면 그에 맞게 rsp를 설정하라.
-
-
-	 * TODO: 해당 페이지를 스택 페이지로 표시해야 한다.
-	 */
-	success = vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom,true);
-
-	if (success){
-		success =vm_claim_page(stack_bottom);
-	}
-	if(success){
+	if (vm_alloc_page (VM_ANON | VM_MARKER_0, stack_bottom, true)) {
+		success = vm_claim_page (stack_bottom);
+		if (success)
 		if_->rsp = USER_STACK;
 	}
-
-	/*
-	 * TODO: 여기에 코드를 작성하라.
-	 */
-
+	/* TODO: 자식 프로세스가 동작하는 동안 부모 프로세스의 페이지가 물리 메모리에 없을 수 있음
+	 * TODO: 즉, 자식 프로세스로 바뀌는 와중에 메모리 공간 부족으로 부모 프로세스의 페이지가 swap-out된 케이스도 고려 필요! */
 	return success;
 }
 #endif /* VM */
