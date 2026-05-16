@@ -19,7 +19,8 @@ enum vm_type {
 	 * int 안에 들어가는 범위라면 더 추가해도 된다. */
 	VM_MARKER_0 = (1 << 3),
 	VM_MARKER_1 = (1 << 4),
-
+	VM_MARKER_2 = (1 << 5),
+	
 	/* 이 값을 넘기지 말 것. */
 	VM_MARKER_END = (1 << 31),
 };
@@ -51,7 +52,6 @@ struct page {
 	struct hash_elem hash_elem;
 	bool writable;
 	void *buffer;
-	bool is_stack_page;
 
 	/* 타입별 데이터는 union에 묶여 있다.
 	 * 각 함수는 현재 어떤 union 멤버를 써야 하는지 자동으로 판단한다. */
@@ -92,8 +92,6 @@ struct page_operations {
  * 이 구조체 설계는 특정 방식으로 강제하지 않는다.
  * 설계는 전적으로 구현자 선택이다. */
 struct supplemental_page_table {
-	// 페이지리스트
-	// hashtable할것이다
 	struct hash spt_entry;
 };
 

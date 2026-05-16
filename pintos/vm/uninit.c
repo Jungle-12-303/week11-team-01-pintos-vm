@@ -11,6 +11,7 @@
 #include "vm/vm.h"
 #include "vm/uninit.h"
 #include "userprog/process.h"
+#include "threads/malloc.h"
 
 static bool uninit_initialize (struct page *page, void *kva);
 static void uninit_destroy (struct page *page);
@@ -66,12 +67,12 @@ uninit_destroy (struct page *page) {
 	struct uninit_page *uninit = &page->uninit;
 	/* TODO: Fill this function.
 	 * TODO: If you don't have anything to do, just return. */
-	
-	struct lazy_load_aux *uninit_aux = &uninit->aux;
-
-	if(uninit_aux && uninit_aux->file !=NULL){
-		file_close(uninit_aux->file);
+	if (uninit->aux != NULL) {
+		struct lazy_load_aux *lazy_aux = uninit->aux;
+    
+    if(uninit_aux->file != NULL) {
+		  file_close (lazy_aux->file);
+    }
+		free (lazy_aux);
 	}
-
-	free(uninit_aux);
 }

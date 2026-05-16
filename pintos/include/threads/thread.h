@@ -130,9 +130,9 @@ struct thread {
 	struct list_elem donation_elem; // 다른 스레드 donation_list의 원소
 	struct lock *waiting_lock;      // 현재 기다리는 락, 우선순위 기부 전파용
 	struct list_elem elem;          // ready_list 또는 semaphore waiters의 원소
-	uint64_t *pml4;
+	uint64_t *pml4;			// userprog/process.c가 소유하는 페이지 맵 레벨 4
+	
 #ifdef USERPROG
-// userprog/process.c가 소유하는 페이지 맵 레벨 4
 
 	struct file **fd_table;           // 파일 디스크립터 테이블
 	int next_fd;                      // 다음에 할당할 fd 번호
