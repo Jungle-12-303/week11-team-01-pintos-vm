@@ -69,8 +69,10 @@ uninit_destroy (struct page *page) {
 	 * TODO: If you don't have anything to do, just return. */
 	if (uninit->aux != NULL) {
 		struct lazy_load_aux *lazy_aux = uninit->aux;
-		file_close (lazy_aux->file);
+    
+    if(uninit_aux->file != NULL) {
+		  file_close (lazy_aux->file);
+    }
 		free (lazy_aux);
 	}
-	return;
 }

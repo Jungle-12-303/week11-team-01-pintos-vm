@@ -164,37 +164,32 @@ vm_handle_wp (struct page *page UNUSED) {
 
 /* Return true on success */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
-                     bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
+vm_try_handle_fault (struct intr_frame *f, void *addr,
+                     bool user UNUSED, bool write, bool not_present) {
+	struct supplemental_page_table *spt = &thread_current ()->spt;
 	struct page *page = NULL;
-	/* TODO: Validate the fault */
-	// addr pg_round_down한다 == PG ALIGN 한다
-	uint64_t *va = pg_round_down (addr); // aligned
-	if (!is_user_vaddr (addr)) {
-		// TODO: -1로 비정상 종료
-		process_exit ();
-	}
+	void *page_addr;
 
-	page = spt_find_page (spt, va);
+	if (addr == NULL || !is_user_vaddr (addr))
+		return false;
+
+	if (!not_present)
+		return false;
+
+	page_addr = pg_round_down (addr);
+	page = spt_find_page (spt, page_addr);
 	if (page == NULL) {
-		// spt에 없으니까 널이 됨.
-		/* Stack growth spt 등록 */
-		if ((uint64_t) addr > pg_round_down (f->rsp) && (uint64_t) addr <= pg_round_down (f->rsp) + PGSIZE) {
-			if (!vm_alloc_page (VM_UNINIT, va, true)) {
-				return false;
-			}
-			// TODO:  마커제로 기억하기
+		uint64_t fault_addr = (uint64_t) addr;
 
-			if (!vm_claim_page (va)) {
-				return false;
-			}
-			return true;
-		}
+		if (fault_addr < (uint64_t) USER_STACK &&
+		    fault_addr >= (uint64_t) USER_STACK - (1 << 20) &&
+		    fault_addr >= f->rsp - 8)
+			return vm_stack_growth (page_addr);
 		return false;
 	}
 
-	/* TODO: Your code goes here */
+	if (write && !page->writable)
+		return false;
 
 	return vm_do_claim_page (page);
 }
@@ -269,22 +264,45 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 
 /* Copy supplemental page table from src to dst */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-                              struct supplemental_page_table *src UNUSED) {
+supplemental_page_table_copy (struct supplemental_page_table *dst,
+                              struct supplemental_page_table *src) {
 	struct hash_iterator i;
+  
 	hash_first (&i, &src->spt_entry);
 	while (hash_next (&i)) {
 		struct page *src_page = hash_entry (hash_cur (&i), struct page, hash_elem);
-		enum vm_type vmtype = page_get_type (src_page);
 
-		if (!vm_alloc_page (vmtype, src_page->va, true)) {
-			return false;
+		if (src_page->operations->type == VM_UNINIT) {
+			void *aux = NULL;
+
+			if (src_page->uninit.aux != NULL) {
+				aux = lazy_load_aux_copy (src_page->uninit.aux);
+				if (aux == NULL)
+					return false;
+			}
+
+			if (!vm_alloc_page_with_initializer (src_page->uninit.type,
+			                                     src_page->va,
+			                                     src_page->writable,
+			                                     src_page->uninit.init,
+			                                     aux)) {
+				lazy_load_aux_destroy (aux);
+				return false;
+			}
+			continue;
 		}
 
-		if (!vm_claim_page (src_page->va)) {
+		if (!vm_alloc_page (page_get_type (src_page), src_page->va,
+		                    src_page->writable))
 			return false;
-		}
+
+		if (!vm_claim_page (src_page->va))
+			return false;
+
 		struct page *dst_page = spt_find_page (dst, src_page->va);
+		if (dst_page == NULL || dst_page->frame == NULL || src_page->frame == NULL)
+			return false;
+
 		memcpy (dst_page->frame->kva, src_page->frame->kva, PGSIZE);
 	}
 	return true;

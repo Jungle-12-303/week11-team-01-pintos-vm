@@ -1255,7 +1255,7 @@ setup_stack (struct intr_frame *if_) {
 	if (vm_alloc_page (VM_ANON | VM_MARKER_0, stack_bottom, true)) {
 		success = vm_claim_page (stack_bottom);
 		if (success)
-		if_->rsp = USER_STACK;
+		  if_->rsp = USER_STACK;
 	}
 	/* TODO: 자식 프로세스가 동작하는 동안 부모 프로세스의 페이지가 물리 메모리에 없을 수 있음
 	 * TODO: 즉, 자식 프로세스로 바뀌는 와중에 메모리 공간 부족으로 부모 프로세스의 페이지가 swap-out된 케이스도 고려 필요! */
