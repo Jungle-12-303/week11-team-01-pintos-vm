@@ -11,6 +11,9 @@
 #include "vm/vm.h"
 #include "vm/uninit.h"
 
+/* 추가 임포트 */
+#include "userprog/process.h"
+
 static bool uninit_initialize (struct page *page, void *kva);
 static void uninit_destroy (struct page *page);
 
@@ -63,6 +66,12 @@ uninit_initialize (struct page *page, void *kva) {
 static void
 uninit_destroy (struct page *page) {
 	struct uninit_page *uninit UNUSED = &page->uninit;
-	/* TODO: Fill this function.
-	 * TODO: If you don't have anything to do, just return. */
+	struct load_info *info = uninit->aux;
+
+	if(info && info->file){
+		if(info->file != NULL)
+			file_close(info->file);
+	}
+
+	free(info);
 }

@@ -5,10 +5,11 @@
 #include "vm/inspect.h"
 
 /* 추가된 include들 */
-#include "threads/vaddr.h"
+#include <string.h>
 #include "lib/kernel/hash.h"
-#include "userprog/process.h"
+#include "threads/vaddr.h"
 #include "threads/mmu.h"
+#include "userprog/process.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -52,6 +53,7 @@ static struct frame *vm_evict_frame (void);
 unsigned page_hash(const struct hash_elem *e, void *aux);
 bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux);
 bool addr_range_check(struct intr_frame *f, void *addr);
+void destroy_page(struct hash_elem *e, void *aux);
 
 
 
@@ -175,7 +177,7 @@ vm_get_frame (void) {
 
 /* Growing the stack.
    페이지를 곧바로 만들고 구현한다 */
-static void
+void
 vm_stack_growth (void *addr UNUSED) {
 	/* 1. 주소를 fault_addr => 새 페이지 시작 주소로 정렬 */
 	void *rounded_ptr = pg_round_down(addr);
@@ -208,8 +210,10 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	 	return vm_do_claim_page (page);
 	}
 
-	/* 일단 여기에 넣어야 한다고.. 추후 학습하기 */
+	/* (3) 일단 여기에 넣어야 한다고.. 추후 학습하기 */
 	if(!addr_range_check(f, addr)) return false;
+
+	// if(page->is_writable != write) return false;
 
 	vm_stack_growth(addr);
 	return true;
@@ -267,13 +271,60 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
+	
+	struct hash_iterator i;
+
+	hash_first(&i, &src->pages);
+
+	/* 각 페이지를 순회한다 */
+	while(hash_next(&i)){
+		struct page *parent = hash_entry(i.elem, struct page, hash_elem);
+		enum vm_type type = page_get_type(parent);
+		enum vm_type orgin_type = parent->operations->type;
+		void *addr = parent->va;
+
+		/* thread_current는 자식 스레드이므로, 이를 가정하고 진행
+		   1. 타입 관계 없이 alloc을 진행한다 
+		   2. 타입이 uninit이 아니라면, 먼제 페이지를 dst에서 찾는다 
+		   3. 찾은 페이지의 frame을 복사하여 넣는다
+		   4. 램 상의 최신 내용을 frame에 덮어쓴다 */
+		if(orgin_type == VM_UNINIT){
+			/* load_info 구조체는 별도로 할당하고 file도 열어줘야 한다 */
+			struct load_info *src_info = parent->uninit.aux;
+			struct load_info *dst_info = malloc(sizeof(struct load_info));
+			if(dst_info == NULL) return false;
+			
+			*dst_info = *src_info;
+			dst_info->file = file_reopen(src_info->file);
+			if(dst_info->file == NULL) return false;
+
+			/* 실패할 경우 load_info 메모리를 해제한다 */
+			if(!vm_alloc_page_with_initializer(type, addr, parent->is_writable,
+											parent->uninit.init, dst_info)){
+				file_close(dst_info->file);
+				free(dst_info);
+				return false;
+			}		
+		}
+		else if(orgin_type != VM_UNINIT){
+			if(!vm_alloc_page(type, addr, parent->is_writable))
+				return false;
+			
+			struct page *child = spt_find_page(dst, addr);
+			if(child == NULL) return false;
+
+			if(!vm_claim_page(addr)) return false;
+			memcpy(child->frame->kva, parent->frame->kva, PGSIZE);
+		}
+	}
+	
+	return true;
 }
 
 /* Free the resource hold by the supplemental page table */
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
-	/* TODO: Destroy all the supplemental_page_table hold by thread and
-	 * TODO: writeback all the modified contents to the storage. */
+
 }
 
 /* hash_page init을 위한 추가 구현부입니다 */
@@ -297,4 +348,10 @@ bool
 addr_range_check(struct intr_frame *f, void *addr){
 	if(addr < f->rsp - 32) return false;
 	return true;
+}
+
+void
+destroy_page(struct hash_elem *e, void *aux){
+	struct page *page = hash_entry(e, struct page, hash_elem);
+	vm_dealloc_page(page);
 }

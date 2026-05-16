@@ -9,6 +9,8 @@
 #include "intrinsic.h"
 
 /* 추가 임포트 */
+#include "lib/string.h"
+#include "devices/input.h"
 #include "threads/init.h"
 #include "threads/palloc.h"
 #include "threads/synch.h"
@@ -17,8 +19,8 @@
 #include "userprog/process.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
-#include "devices/input.h"
-#include "lib/string.h"
+#include "vm/vm.h"
+
 
 #define FD_MAX (PGSIZE / sizeof (struct file *))
 
@@ -30,14 +32,18 @@ void halt (void);
 void exit (int status);
 tid_t fork (const char *thread_name, struct intr_frame *f);
 int exec (const char *cmd_line);
-int write (int fd, const void *buffer, unsigned size);
-int read (int fd, void *buffer, unsigned size);
+int write (int fd, const void *buffer, unsigned size, void *rsp);
+int read (int fd, void *buffer, unsigned size, void *rsp);
 bool create (const char *file, unsigned initial_size);
 int open (const char *file);
 void close (int fd);
+void seek (int fd, unsigned position);
+
 void check_address (const void *addr);
 static void check_user_buffer (const void *buffer, unsigned size);
 static void check_user_string (const char *str);
+static void check_page_growth (const void *buffer, unsigned size, 
+							   bool need_write, void *rsp);
 
 /* 추가 변수들 */
 struct lock filesys_lock;
@@ -103,11 +109,11 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		f->R.rax = exec ((const char *) f->R.rdi);
 		break;
 	case SYS_READ:
-		f->R.rax = read (f->R.rdi, (void *) f->R.rsi, f->R.rdx);
+		f->R.rax = read (f->R.rdi, (void *) f->R.rsi, f->R.rdx, f->rsp);
 		break;
 	case SYS_WRITE:
 		/* fd, buffer, size를 전달받는다. */
-		f->R.rax = write (f->R.rdi, (const void *) f->R.rsi, f->R.rdx);
+		f->R.rax = write (f->R.rdi, (const void *) f->R.rsi, f->R.rdx, f->rsp);
 		break;
 	case SYS_EXIT:
 		/* 종료 상태값 받음 */
@@ -124,7 +130,10 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		break;
 	case SYS_FILESIZE:
 		f->R.rax = filesize(f->R.rdi);
-	break;
+		break;
+	case SYS_SEEK:
+		seek(f->R.rdi, f->R.rsi);
+		break;
 	default:
 		break;
 	}
@@ -175,12 +184,13 @@ exit (int status) {
 }
 
 int
-write (int fd, const void *buffer, unsigned size) {
+write (int fd, const void *buffer, unsigned size, void *rsp) {
 	int write_result;
 	struct file *file;
 
-	/* 유효성 검사 로직 */
+	/* 유효성 검사 */
 	check_user_buffer (buffer, size);
+	check_page_growth(buffer, size, false, rsp);
 
 	/* 락 획득: 동시에 읽어서 꼬임 방지*/
 	lock_acquire (&filesys_lock);
@@ -207,6 +217,8 @@ create (const char *file, unsigned initial_size) {
 	bool result;
 
 	check_address ((void *) file);
+	check_user_string(file);
+
 	lock_acquire (&filesys_lock);
 	result = filesys_create (file, initial_size);
 	lock_release (&filesys_lock);
@@ -219,6 +231,7 @@ open (const char *file) {
 	int fd;
 
 	check_address ((void *) file);
+	check_user_string(file);
 	lock_acquire (&filesys_lock);
 
 	// 열린 파일 객체의 주소
@@ -245,11 +258,15 @@ close (int fd) {
 }
 
 int
-read (int fd, void *buffer, unsigned size) {
+read (int fd, void *buffer, unsigned size, void *rsp) {
 	int type_size = 0;
 	uint8_t *buf = (uint8_t *) buffer;
 
+	/* 예외처리 코드.. 사실 너무 누더기가 되었다 */
 	check_address (buffer);
+	check_user_buffer(buffer, size);
+	check_page_growth(buffer, size, true, rsp);
+	
 	lock_acquire (&filesys_lock);
 	struct file *f = process_get_file (fd);
 	if (f == NULL) {
@@ -303,6 +320,7 @@ seek (int fd, unsigned position) {
 void
 check_address (const void *addr) {
 	struct thread *curr = thread_current ();
+
 	/* 애초에 없다면? */
 	if (addr == NULL) {
 		exit (-1);
@@ -315,22 +333,21 @@ check_address (const void *addr) {
 	if (!is_user_vaddr (addr)) {
 		exit (-1);
 	}
-
-	/* 현재 프로세스의 페이지 테이블에서 addr가 실제 물리 메모리에 매핑되어 있는지 확인하고,
-	없으면 프로세스를 종료한다. */
-	if (pml4_get_page (curr->pml4, addr) == NULL) {
-		exit (-1);
-	}
 }
 
 static void
 check_user_buffer (const void *buffer, unsigned size) {
+	struct supplemental_page_table *spt = &thread_current()->spt;
 	const char *addr = buffer;
 	uintptr_t start;
 	uintptr_t end;
 
 	if (size == 0)
 		return;
+
+	// struct page *page = spt_find_page(spt, addr);
+	// if (page == NULL)
+	// 	exit(-1);
 
 	check_address (buffer);
 	check_address (addr + size - 1);
@@ -343,10 +360,56 @@ check_user_buffer (const void *buffer, unsigned size) {
 
 static void
 check_user_string (const char *str) {
+	struct supplemental_page_table *spt = &thread_current()->spt;
+	struct page *page = spt_find_page(spt, str);
+	if (page == NULL)
+		exit(-1);
+	
 	while (true) {
+		/* 주소값 하나: 1바이트 씩 검사 */
 		check_address (str);
 		if (*str == '\0')
 			return;
 		str++;
+	}
+}
+
+static void 
+check_page_growth (const void *buffer, unsigned size, bool need_write, void *rsp){
+	struct supplemental_page_table *spt = &thread_current()->spt;
+
+	char *ptr = pg_round_down(buffer);
+	char *end = (char *)buffer + size;
+
+	/* writable한지 권한 알아보기: 순회하면서 
+	   1. 페이지가 없다면? => 유저 영역 내라면 확장 
+	   2. 페이지가 있는데 writable이 아니라면? => exit(-1) */
+	while(ptr < end){
+		struct page *page = spt_find_page(spt, ptr);
+		void *check_addr;
+		
+		if (ptr == pg_round_down(buffer))
+			check_addr = (void *) buffer;
+		else
+			check_addr = ptr;
+		
+		
+		if(page == NULL){
+			if(is_user_vaddr(check_addr) &&
+			    check_addr >= rsp - 32 && 
+				check_addr < USER_STACK)
+				vm_stack_growth(ptr);
+			else
+				exit(-1);
+		}
+		else {
+			if(need_write && page->is_writable == false)
+				exit(-1);
+
+			if(page->frame == NULL)
+				vm_claim_page(ptr);
+		}
+
+		ptr += PGSIZE;
 	}
 }

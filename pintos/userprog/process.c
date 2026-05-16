@@ -43,15 +43,6 @@ struct initd_args {
 	struct child_status *cs; // 부모가 만든 자식 상태 레코드
 };
 
-/* vm: 추가 구현 구조체 */
-struct load_info {
-	struct file *file;
-	off_t ofs;
-	uint32_t read_bytes;
-	uint32_t zero_bytes;
-	bool is_writable;
-};
-
 /* fd_table 최대 슬롯 수 (4KB 페이지 / 포인터 크기). */
 #define FD_MAX (PGSIZE / sizeof (struct file *))
 
