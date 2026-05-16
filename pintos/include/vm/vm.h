@@ -52,7 +52,6 @@ struct page {
 	struct hash_elem hash_elem;
 	bool writable;
 	void *buffer;
-	bool is_stack_page;
 
 	/* 타입별 데이터는 union에 묶여 있다.
 	 * 각 함수는 현재 어떤 union 멤버를 써야 하는지 자동으로 판단한다. */
