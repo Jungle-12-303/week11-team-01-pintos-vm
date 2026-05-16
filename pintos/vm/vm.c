@@ -187,7 +187,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 
 		if (fault_addr < (uint64_t) USER_STACK &&
 		    fault_addr >= (uint64_t) USER_STACK - (1 << 20) &&
-		    fault_addr >= f->rsp - 8)
+		    fault_addr >= f->rsp - sizeof(uint64_t))
 			return vm_stack_growth (page_addr);
 		return false;
 	}
