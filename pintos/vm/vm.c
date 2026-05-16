@@ -7,6 +7,7 @@
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
 #include "userprog/process.h"
+#include "filesys/file.h"
 #include "string.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
@@ -41,8 +42,8 @@ page_get_type (struct page *page) {
 static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
-static bool hash_list_sort (const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
-static int hash_convert_int (const struct hash_elem *elem, void *aux UNUSED);
+static void lazy_load_aux_destroy (void *aux);
+static void *lazy_load_aux_copy (void *aux);
 
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
@@ -79,7 +80,6 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable, v
 		}
 		return true;
 	}
-err:
 	return false;
 }
 
@@ -110,8 +110,8 @@ spt_insert_page (struct supplemental_page_table *spt,
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
+	hash_delete (&spt->spt_entry, &page->hash_elem);
 	vm_dealloc_page (page);
-	return true;
 }
 
 /* Get the struct frame, that will be evicted. */
@@ -153,13 +153,17 @@ vm_get_frame (void) {
 }
 
 /* Growing the stack. */
-static void
-vm_stack_growth (void *addr UNUSED) {
+static bool
+vm_stack_growth (void *addr) {
+	void *upage = pg_round_down (addr);
+	return vm_alloc_page (VM_ANON | VM_MARKER_0, upage, true) &&
+	       vm_claim_page (upage);
 }
 
 /* Handle the fault on write_protected page */
 static bool
 vm_handle_wp (struct page *page UNUSED) {
+	return false;
 }
 
 /* Return true on success */
@@ -232,15 +236,24 @@ vm_do_claim_page (struct page *page) {
 	if (!pml4_set_page (thread_current ()->pml4, page->va, frame->kva, page->writable)) {
 		palloc_free_page (frame->kva);
 		free (frame);
+		page->frame = NULL;
 
 		return false;
 	};
 
-	return swap_in (page, frame->kva);
+	if (!swap_in (page, frame->kva)) {
+		pml4_clear_page (thread_current ()->pml4, page->va);
+		palloc_free_page (frame->kva);
+		free (frame);
+		page->frame = NULL;
+		return false;
+	}
+
+	return true;
 }
 
 /* Returns a hash value for page p. */
-unsigned
+uint64_t
 page_hash (const struct hash_elem *p_, void *aux UNUSED) {
 	const struct page *p = hash_entry (p_, struct page, hash_elem);
 	return hash_bytes (&p->va, sizeof p->va);
@@ -264,22 +277,18 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 
 /* Copy supplemental page table from src to dst */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst,
-                              struct supplemental_page_table *src) {
+supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
+                              struct supplemental_page_table *src UNUSED) {
 	struct hash_iterator i;
-  
 	hash_first (&i, &src->spt_entry);
 	while (hash_next (&i)) {
 		struct page *src_page = hash_entry (hash_cur (&i), struct page, hash_elem);
+		enum vm_type vmtype = page_get_type (src_page);
 
 		if (src_page->operations->type == VM_UNINIT) {
-			void *aux = NULL;
-
-			if (src_page->uninit.aux != NULL) {
-				aux = lazy_load_aux_copy (src_page->uninit.aux);
-				if (aux == NULL)
-					return false;
-			}
+			void *aux = lazy_load_aux_copy (src_page->uninit.aux);
+			if (src_page->uninit.aux != NULL && aux == NULL)
+				return false;
 
 			if (!vm_alloc_page_with_initializer (src_page->uninit.type,
 			                                     src_page->va,
@@ -289,23 +298,60 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 				lazy_load_aux_destroy (aux);
 				return false;
 			}
+
+			if (!vm_claim_page (src_page->va))
+				return false;
+
 			continue;
 		}
 
-		if (!vm_alloc_page (page_get_type (src_page), src_page->va,
-		                    src_page->writable))
+		if (!vm_alloc_page (vmtype, src_page->va, src_page->writable)) {
 			return false;
+		}
 
-		if (!vm_claim_page (src_page->va))
+		if (!vm_claim_page (src_page->va)) {
 			return false;
-
+		}
 		struct page *dst_page = spt_find_page (dst, src_page->va);
-		if (dst_page == NULL || dst_page->frame == NULL || src_page->frame == NULL)
+		if (dst_page == NULL || dst_page->frame == NULL ||
+		    src_page->frame == NULL) {
 			return false;
-
+		}
 		memcpy (dst_page->frame->kva, src_page->frame->kva, PGSIZE);
 	}
 	return true;
+}
+
+static void *
+lazy_load_aux_copy (void *aux) {
+	if (aux == NULL)
+		return NULL;
+
+	struct lazy_load_aux *src = aux;
+	struct lazy_load_aux *dst = malloc (sizeof *dst);
+	if (dst == NULL)
+		return NULL;
+
+	*dst = *src;
+	if (src->file != NULL) {
+		dst->file = file_reopen (src->file);
+		if (dst->file == NULL) {
+			free (dst);
+			return NULL;
+		}
+	}
+	return dst;
+}
+
+static void
+lazy_load_aux_destroy (void *aux) {
+	if (aux == NULL)
+		return;
+
+	struct lazy_load_aux *lazy_aux = aux;
+	if (lazy_aux->file != NULL)
+		file_close (lazy_aux->file);
+	free (lazy_aux);
 }
 
 static void

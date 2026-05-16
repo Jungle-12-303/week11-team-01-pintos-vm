@@ -411,6 +411,9 @@ process_exec (void *f_name) {
 	 * 먼저 현재 문맥을 제거한다.
 	 */
 	process_cleanup ();
+#ifdef VM
+	supplemental_page_table_init (&curr->spt);
+#endif
 
 	/* 첫 exec일 때만 fd_table을 준비하고, 기존 열린 fd는 유지한다. */
 	if (curr->fd_table == NULL) {
