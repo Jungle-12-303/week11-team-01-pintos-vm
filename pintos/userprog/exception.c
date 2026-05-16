@@ -4,6 +4,7 @@
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "userprog/syscall.h"
 #include "intrinsic.h"
 
 /*
@@ -92,14 +93,7 @@ kill (struct intr_frame *f) {
 	 */
 	switch (f->cs) {
 		case SEL_UCSEG:
-			/*
-			 * 유저 코드 세그먼트이므로, 예상대로 유저 예외다.
-			 * 유저 프로세스를 종료한다.
-			 */
-			printf ("%s: dying due to interrupt %#04llx (%s).\n",
-					thread_name (), f->vec_no, intr_name (f->vec_no));
-			intr_dump_frame (f);
-			thread_exit ();
+			exit (-1);
 
 		case SEL_KCSEG:
 			/*
@@ -187,9 +181,9 @@ page_fault (struct intr_frame *f) {
 	 */
 	page_fault_cnt++;
 
-	/*
-	 * 실제 fault라면 정보를 출력하고 종료한다.
-	 */
+	if (user || f->cs == SEL_UCSEG)
+		exit (-1);
+
 	printf ("Page fault at %p: %s error %s page in %s context.\n",
 			fault_addr,
 			not_present ? "not present" : "rights violation",

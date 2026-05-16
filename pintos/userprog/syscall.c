@@ -19,6 +19,9 @@
 #include "filesys/file.h"
 #include "devices/input.h"
 #include "lib/string.h"
+#ifdef VM
+#include "vm/vm.h"
+#endif
 
 #define FD_MAX (PGSIZE / sizeof (struct file *))
 
@@ -35,6 +38,10 @@ int read (int fd, void *buffer, unsigned size);
 bool create (const char *file, unsigned initial_size);
 int open (const char *file);
 void close (int fd);
+int filesize (int fd);
+bool remove (const char *file);
+void seek (int fd, unsigned position);
+unsigned tell (int fd);
 void check_address (const void *addr);
 static void check_user_buffer (const void *buffer, unsigned size);
 static void check_user_string (const char *str);
@@ -124,9 +131,18 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		break;
 	case SYS_FILESIZE:
 		f->R.rax = filesize(f->R.rdi);
-	break;
-	default:
 		break;
+	case SYS_REMOVE:
+		f->R.rax = remove ((const char *) f->R.rdi);
+		break;
+	case SYS_SEEK:
+		seek (f->R.rdi, f->R.rsi);
+		break;
+	case SYS_TELL:
+		f->R.rax = tell (f->R.rdi);
+		break;
+	default:
+		exit (-1);
 	}
 }
 
@@ -249,7 +265,7 @@ read (int fd, void *buffer, unsigned size) {
 	int type_size = 0;
 	uint8_t *buf = (uint8_t *) buffer;
 
-	check_address (buffer);
+	check_user_buffer (buffer, size);
 	lock_acquire (&filesys_lock);
 	struct file *f = process_get_file (fd);
 	if (f == NULL) {
@@ -317,8 +333,14 @@ check_address (const void *addr) {
 	}
 
 	/* 현재 프로세스의 페이지 테이블에서 addr가 실제 물리 메모리에 매핑되어 있는지 확인하고,
-	없으면 프로세스를 종료한다. */
+	없으면 VM의 지연 로딩 페이지를 먼저 claim한다. */
 	if (pml4_get_page (curr->pml4, addr) == NULL) {
+#ifdef VM
+		void *upage = pg_round_down (addr);
+
+		if (vm_claim_page (upage))
+			return;
+#endif
 		exit (-1);
 	}
 }

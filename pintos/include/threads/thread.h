@@ -38,6 +38,8 @@ struct child_status {
 	struct list_elem elem;      // 부모의 child_status_list 원소
 };
 
+struct file;
+
 /*
  * 스레드 이름 버퍼의 최대 크기.
  */
@@ -138,6 +140,7 @@ struct thread {
 	int next_fd;                      // 다음에 할당할 fd 번호
 	struct list child_status_list;    // 부모가 소유하는 자식 상태 레코드 목록
 	struct child_status *self_status; // 현재 스레드 자신의 child_status
+	struct file *running_file;        // 실행 중인 파일의 쓰기 방지용 핸들
 #endif
 #ifdef VM
 	/*
